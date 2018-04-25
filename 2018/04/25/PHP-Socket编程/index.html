@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="">
+  <head>
+    
+<meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+<meta name="theme-color" content="#f8f5ec" />
+<meta name="msapplication-navbutton-color" content="#f8f5ec">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="#f8f5ec">
+
+
+
+  <meta name="description" content="PHP Socket编程"/>
+
+
+
+
+  <meta name="keywords" content="php, socket, HelloZZZC's blog" />
+
+
+
+
+
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="HelloZZZC's blog">
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=2.6.0" />
+
+
+
+<link rel="canonical" href="http://hellozzzc.github.io/2018/04/25/PHP-Socket编程/"/>
+
+
+<link rel="stylesheet" type="text/css" href="/css/style.css?v=2.6.0" />
+
+
+
+  <link rel="stylesheet" type="text/css" href="/lib/fancybox/jquery.fancybox.css" />
+
+
+
+
+  
+
+
+
+  <script id="baidu_push">
+(function(){
+    var bp = document.createElement('script');
+    var curProtocol = window.location.protocol.split(':')[0];
+    if (curProtocol === 'https') {
+        bp.src = 'https://zz.bdstatic.com/linksubmit/push.js';
+    }
+    else {
+        bp.src = 'http://push.zhanzhang.baidu.com/push.js';
+    }
+    var s = document.getElementsByTagName("script")[0];
+    s.parentNode.insertBefore(bp, s);
+})();
+</script>
+
+
+
+
+
+
+
+
+
+    <title> PHP Socket编程 - HelloZZZC's blog </title>
+  </head>
+
+  <body><div id="mobile-navbar" class="mobile-navbar">
+  <div class="mobile-header-logo">
+    <a href="/." class="logo">HelloZZZC's blog</a>
+  </div>
+  <div class="mobile-navbar-icon">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+</div>
+
+<nav id="mobile-menu" class="mobile-menu slideout-menu">
+  <ul class="mobile-menu-list">
+    
+      <a href="/">
+        <li class="mobile-menu-item">
+          
+          
+            首页
+          
+        </li>
+      </a>
+    
+      <a href="/archives/">
+        <li class="mobile-menu-item">
+          
+          
+            归档
+          
+        </li>
+      </a>
+    
+      <a href="/tags">
+        <li class="mobile-menu-item">
+          
+          
+            标签
+          
+        </li>
+      </a>
+    
+  </ul>
+</nav>
+
+    <div class="container" id="mobile-panel">
+      <header id="header" class="header"><div class="logo-wrapper">
+  <a href="/." class="logo">HelloZZZC's blog</a>
+</div>
+
+<nav class="site-navbar">
+  
+    <ul id="menu" class="menu">
+      
+        <li class="menu-item">
+          <a class="menu-item-link" href="/">
+            
+            
+              首页
+            
+          </a>
+        </li>
+      
+        <li class="menu-item">
+          <a class="menu-item-link" href="/archives/">
+            
+            
+              归档
+            
+          </a>
+        </li>
+      
+        <li class="menu-item">
+          <a class="menu-item-link" href="/tags">
+            
+            
+              标签
+            
+          </a>
+        </li>
+      
+    </ul>
+  
+</nav>
+
+      </header>
+
+      <main id="main" class="main">
+        <div class="content-wrapper">
+          <div id="content" class="content">
+            
+  
+  <article class="post">
+    <header class="post-header">
+      <h1 class="post-title">
+        
+          PHP Socket编程
+        
+      </h1>
+
+      <div class="post-meta">
+        <span class="post-time">
+          2018-04-25
+        </span>
+        
+        
+      </div>
+    </header>
+
+    
+    
+  <div class="post-toc" id="post-toc">
+    <h2 class="post-toc-title">文章目录</h2>
+    <div class="post-toc-content">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#PHP-Socket编程"><span class="toc-text">PHP Socket编程</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#SocketServer"><span class="toc-text">SocketServer</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#SocketClient"><span class="toc-text">SocketClient</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#参考资料"><span class="toc-text">参考资料</span></a></li></ol></li></ol>
+    </div>
+  </div>
+
+
+    <div class="post-content">
+      
+        <h3 id="PHP-Socket编程"><a href="#PHP-Socket编程" class="headerlink" title="PHP Socket编程"></a>PHP Socket编程</h3><p>socket是介于应用层和传输层中间的一个抽象层，socket并不是什么协议只是一套简单得API将复杂的TCP/IP族封装到了API背后。<br><img src="http://images.cnitblog.com/blog/349217/201312/05225723-2ffa89aad91f46099afa530ef8660b20.jpg" alt="socket priciple"><br><a id="more"></a><br>socket通信过程大致就是server创建一个socket，bind一个socket和端口号，listen这个socket连接。当client主动去connect server时，server会准备去accepts connect并且进入阻塞状态。整套建立连接的过程是基于TCP/IP协议的3次握手，具体流程如下图<br><img src="http://images.cnitblog.com/blog/349217/201312/05234946-b80841921eae4d2ab983f26ed9023768.png" alt="tcp/ip connect"><br>下面简单的代码实现</p>
+<h4 id="SocketServer"><a href="#SocketServer" class="headerlink" title="SocketServer"></a>SocketServer</h4><figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"><span class="comment">//创建一个server socket</span></span><br><span class="line">$socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);</span><br><span class="line"></span><br><span class="line"><span class="comment">//绑定一个socket address和port与client一致</span></span><br><span class="line"><span class="keyword">if</span> (!socket_bind($socket, <span class="string">'127.0.0.1'</span>, <span class="number">10086</span>)) &#123;</span><br><span class="line">    <span class="keyword">echo</span> <span class="string">"socket server bind fail, reason:"</span>.socket_strerror(socket_last_error());</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//建立监听 监听socket</span></span><br><span class="line"><span class="keyword">if</span> (!socket_listen($socket)) &#123;</span><br><span class="line">    <span class="keyword">echo</span> <span class="string">"socket server listen fail, reason:"</span>.socket_strerror(socket_last_error());</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//死循环去读取客户端的信息</span></span><br><span class="line"><span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">    $connection = socket_accept($socket);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!$connection) &#123;</span><br><span class="line">        <span class="keyword">echo</span> <span class="string">"socket server accept fail, reason:"</span>.socket_strerror(socket_last_error());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    $clientMsg = socket_read($connection, <span class="number">1024</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!$clientMsg) &#123;</span><br><span class="line">        <span class="keyword">echo</span> <span class="string">"socket server read client msg fail"</span>;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">echo</span> <span class="string">"server receive client msg: "</span>.$clientMsg.PHP_EOL;</span><br><span class="line"></span><br><span class="line">        $returnMsg = <span class="string">"server received msg!"</span>;</span><br><span class="line"></span><br><span class="line">        socket_write($connection, $returnMsg);</span><br><span class="line">    &#125;</span><br><span class="line">    socket_close($connection);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">socket_close($socket);</span><br></pre></td></tr></table></figure>
+<h4 id="SocketClient"><a href="#SocketClient" class="headerlink" title="SocketClient"></a>SocketClient</h4><figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&lt;?php</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 创建一个套接字</span></span><br><span class="line">$socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);</span><br><span class="line"></span><br><span class="line"><span class="comment">//与服务器socket建立连接</span></span><br><span class="line"><span class="keyword">if</span> (!socket_connect($socket, <span class="string">'127.0.0.1'</span>, <span class="number">10086</span>)) &#123;</span><br><span class="line">    <span class="keyword">echo</span> <span class="string">"client connect server fail, reason:"</span>.socket_strerror(socket_last_error());</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">$clientMsg = <span class="string">'hello world! socket programing!'</span>;</span><br><span class="line"></span><br><span class="line">$clientMsg = mb_convert_encoding($clientMsg, <span class="string">'UTF-8'</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">//向socket写入数据</span></span><br><span class="line"><span class="keyword">if</span> (!socket_write($socket, $clientMsg)) &#123;</span><br><span class="line">    <span class="keyword">echo</span> <span class="string">"client write fail"</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//读取server端的信息</span></span><br><span class="line"><span class="keyword">if</span> ($serverMsg = socket_read($socket, <span class="number">1024</span>)) &#123;</span><br><span class="line">    <span class="keyword">echo</span> <span class="string">"server return msg: "</span>.$serverMsg.PHP_EOL;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>PS:socket_create属于php的扩展，需要安装这个extension并且在<code>php.ini</code>中显示打开的状态。有兴趣的朋友可以了解一下http连接和socket连接的区别，以及php_socket其他的一些api的功能等等。</p>
+<h4 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h4><p>—— <a href="http://php.net/manual/zh/ref.sockets.php" target="_blank" rel="noopener">php手册</a><br>—— <a href="https://www.cnblogs.com/jing99/p/6181488.html" target="_blank" rel="noopener">cnblog</a><br>—— <a href="https://blog.csdn.net/JenMinZhang/article/details/47017741" target="_blank" rel="noopener">csdn</a></p>
+
+      
+    </div>
+
+    
+      
+      
+
+  <div class="post-copyright">
+    <p class="copyright-item">
+      <span>原文作者: </span>
+      <a href="http://hellozzzc.github.io">HelloZZZC</a>
+    </p>
+    <p class="copyright-item">
+      <span>原文链接: </span>
+      <a href="http://hellozzzc.github.io/2018/04/25/PHP-Socket编程/">http://hellozzzc.github.io/2018/04/25/PHP-Socket编程/</a>
+    </p>
+    <p class="copyright-item">
+      <span>许可协议: </span>
+      
+      <a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>
+    </p>
+  </div>
+
+
+
+      
+      
+    
+
+    
+      <footer class="post-footer">
+        
+          <div class="post-tags">
+            
+              <a href="/tags/php/">php</a>
+            
+              <a href="/tags/socket/">socket</a>
+            
+          </div>
+        
+        
+        
+  <nav class="post-nav">
+    
+    
+      <a class="next" href="/2018/04/22/chain-of-responsibilities/">
+        <span class="next-text nav-default">chain-of-responsibilities</span>
+        <span class="prev-text nav-mobile">下一篇</span>
+        <i class="iconfont icon-right"></i>
+      </a>
+    
+  </nav>
+
+      </footer>
+    
+
+  </article>
+
+
+          </div>
+          
+  <div class="comments" id="comments">
+    
+  </div>
+
+
+        </div>
+      </main>
+
+      <footer id="footer" class="footer">
+
+  <div class="social-links">
+    
+      
+        
+          <a href="mailto:zc19940702@gmail.com" class="iconfont icon-email" title="email"></a>
+        
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        
+          <a href="https://github.com/HelloZZZC" class="iconfont icon-github" title="github"></a>
+        
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+    
+    
+  </div>
+
+
+<div class="copyright">
+  <span class="power-by">
+    由 <a class="hexo-link" href="https://hexo.io/">Hexo</a> 强力驱动
+  </span>
+  <span class="division">|</span>
+  <span class="theme-info">
+    主题 - 
+    <a class="theme-link" href="https://github.com/ahonn/hexo-theme-even">Even</a>
+  </span>
+
+  <span class="copyright-year">
+    
+    &copy; 
+     
+      2015 - 
+    
+    2018
+
+    <span class="heart">
+      <i class="iconfont icon-heart"></i>
+    </span>
+    <span class="author">HelloZZZC</span>
+  </span>
+</div>
+
+      </footer>
+
+      <div class="back-to-top" id="back-to-top">
+        <i class="iconfont icon-up"></i>
+      </div>
+    </div>
+
+    
+  
+  
+
+  
+
+
+
+    
+  
+
+
+
+
+
+  
+    <script type="text/javascript" src="/lib/jquery/jquery-3.1.1.min.js"></script>
+  
+
+  
+    <script type="text/javascript" src="/lib/slideout/slideout.js"></script>
+  
+
+  
+    <script type="text/javascript" src="/lib/fancybox/jquery.fancybox.pack.js"></script>
+  
+
+
+    <script type="text/javascript" src="/js/src/even.js?v=2.6.0"></script>
+<script type="text/javascript" src="/js/src/bootstrap.js?v=2.6.0"></script>
+
+  </body>
+</html>
