@@ -17,10 +17,12 @@
 
 
 
-  <meta name="description" content="tags"/>
+  <meta name="description" content="简单聊聊scrapy"/>
 
 
 
+
+  <meta name="keywords" content="Python, HelloZZZC's blog" />
 
 
 
@@ -40,7 +42,7 @@
 
 
 
-<link rel="canonical" href="http://hellozzzc.github.io/tags/"/>
+<link rel="canonical" href="http://hellozzzc.github.io/2018/05/16/简单聊聊scrapy/"/>
 
 
 <link rel="stylesheet" type="text/css" href="/css/style.css?v=2.6.0" />
@@ -79,7 +81,7 @@
 
 
 
-    <title> 标签 - HelloZZZC's blog11 </title>
+    <title> 简单聊聊scrapy - HelloZZZC's blog </title>
   </head>
 
   <body><div id="mobile-navbar" class="mobile-navbar">
@@ -172,14 +174,97 @@
         <div class="content-wrapper">
           <div id="content" class="content">
             
-  <div class="tag-cloud">
-    <div class="tag-cloud-title">
-      目前共计 3 个标签
-    </div>
-    <div class="tag-cloud-tags">
-      <a href="/tags/design-patterns/" style="font-size: 28px;">设计模式</a> <a href="/tags/Python/" style="font-size: 16px;">Python</a> <a href="/tags/PHP/" style="font-size: 22px;">PHP</a>
+  
+  <article class="post">
+    <header class="post-header">
+      <h1 class="post-title">
+        
+          简单聊聊scrapy
+        
+      </h1>
+
+      <div class="post-meta">
+        <span class="post-time">
+          2018-05-16
+        </span>
+        
+        
+      </div>
+    </header>
+
+    
+    
+  <div class="post-toc" id="post-toc">
+    <h2 class="post-toc-title">文章目录</h2>
+    <div class="post-toc-content">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#简单聊聊scrapy（一）"><span class="toc-text">简单聊聊scrapy（一）</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#流程"><span class="toc-text">流程</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#目前常用命令"><span class="toc-text">目前常用命令</span></a></li></ol></li></ol>
     </div>
   </div>
+
+
+    <div class="post-content">
+      
+        <h3 id="简单聊聊scrapy（一）"><a href="#简单聊聊scrapy（一）" class="headerlink" title="简单聊聊scrapy（一）"></a>简单聊聊scrapy（一）</h3><p>在下刚刚接触爬虫不是很久，对爬虫也是因为有点兴趣，再加上朋友希望让我帮他做一个东西才开始学习的python。刚开始的时候在想怎么上手最快啊！没错！当然是直接运用一个成熟的框架，因此才通过google搜到了这个框架。下面就大概聊聊萌新学爬虫吧<br><img src="https://images2015.cnblogs.com/blog/931154/201703/931154-20170314141524729-978666187.png" alt="scrapy framework"><br><a id="more"></a><br>上面这张图就是整个scrapy框架的几个模块，其中Engine就是从中最核心的模块，就算看图也看的出来engine跟这么多模块有交集想想也应该知道他的地位不低。下面就大致说下流程具体的每个模块的作用其实不用我说大家在google中搜索一下也有很多文档中有说明。</p>
+<h4 id="流程"><a href="#流程" class="headerlink" title="流程"></a>流程</h4><p>用户(我):我要爬一个xxxx网站!<br>Engine: 没问题!包在我身上!<br>Engine:xxxx网站spider!给我第一个要爬取的url<br>xxxx网站spider:好的！要爬的url是xxxx.com<br>Engine:好的！收到了，我去让Scheduler帮我准备一下这个request<br>Scheduler:准备好了！这是处理过的request(加上user_agent,header等等)<br>Engine:好的收到了，我让Downloader帮我下载页面，并把Reponse给我<br>Downloader:Engine你要的Response我已经弄好了，现在就给你<br>Engine:好的收到了，我现在就让Spider去处理数据<br>Spider:收到Response了，现在分析好数据就交给ItemPipeline，如果还有要跟进的request，Engine你继续跟进<br>ItemPipeline:接收到数据了，现在进行去重，持久化，写入数据库的操作<br>以上就是自己总结的流程，写的不是很好大家有问题大家可以一起提出来一起探讨探讨。</p>
+<h4 id="目前常用命令"><a href="#目前常用命令" class="headerlink" title="目前常用命令"></a>目前常用命令</h4><p><code>scrapy startproject xxxx</code> 创建项目<br><code>scrapy crawl xxxx</code> 运行相应的爬虫  </p>
+<p>今天就大概讲讲流程和刚开始常用的2个命令，之后通过一个例子大致讲一下简单的去爬一个网站。最后提一个建议:mac用户最好去装一个<code>virtualenv</code>避免影响自己的环境。</p>
+
+      
+    </div>
+
+    
+      
+      
+
+  <div class="post-copyright">
+    <p class="copyright-item">
+      <span>原文作者: </span>
+      <a href="http://hellozzzc.github.io">HelloZZZC</a>
+    </p>
+    <p class="copyright-item">
+      <span>原文链接: </span>
+      <a href="http://hellozzzc.github.io/2018/05/16/简单聊聊scrapy/">http://hellozzzc.github.io/2018/05/16/简单聊聊scrapy/</a>
+    </p>
+    <p class="copyright-item">
+      <span>许可协议: </span>
+      
+      <a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>
+    </p>
+  </div>
+
+
+
+      
+      
+    
+
+    
+      <footer class="post-footer">
+        
+          <div class="post-tags">
+            
+              <a href="/tags/Python/">Python</a>
+            
+          </div>
+        
+        
+        
+  <nav class="post-nav">
+    
+    
+      <a class="next" href="/2018/04/25/PHP-Socket编程/">
+        <span class="next-text nav-default">PHP Socket编程</span>
+        <span class="prev-text nav-mobile">下一篇</span>
+        <i class="iconfont icon-right"></i>
+      </a>
+    
+  </nav>
+
+      </footer>
+    
+
+  </article>
+
 
           </div>
           
@@ -277,9 +362,9 @@
   
   <script type="text/javascript">
     var disqus_config = function () {
-        this.page.url = 'http://hellozzzc.github.io/tags/index.html';
-        this.page.identifier = 'tags/index.html';
-        this.page.title = 'tags';
+        this.page.url = 'http://hellozzzc.github.io/2018/05/16/简单聊聊scrapy/';
+        this.page.identifier = '2018/05/16/简单聊聊scrapy/';
+        this.page.title = '简单聊聊scrapy';
     };
     (function() {
     var d = document, s = d.createElement('script');
