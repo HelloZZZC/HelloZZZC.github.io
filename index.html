@@ -179,6 +179,51 @@
     <header class="post-header">
       <h1 class="post-title">
         
+          <a class="post-link" href="/2018/05/17/用scrapy写一个简单的爬虫/">用scrapy写一个简单的爬虫</a>
+        
+      </h1>
+
+      <div class="post-meta">
+        <span class="post-time">
+          2018-05-17
+        </span>
+        
+        
+      </div>
+    </header>
+
+    
+    
+
+    <div class="post-content">
+      
+        
+        
+          
+        
+
+        
+          <h3 id="爬取豆瓣Top250的电影"><a href="#爬取豆瓣Top250的电影" class="headerlink" title="爬取豆瓣Top250的电影"></a>爬取豆瓣Top250的电影</h3><p>即上次发的《简单聊聊scrapy》这次要写一些具体操作啦！首现当然是要创建一个project<code>scrapy startproject doubantop</code>。执行完命令之后就会看到项目文件夹，下面就讲几个比较重要的文件。<code>settings.py</code>是这个项目的配置文件，里面包含了User_Agent、Cookie、还有一些中间件的配置、还可以自己写入一些配置比如mysql的的配置（主要是因为我用的是mysql，有兴趣的话可以用mongodb）。<code>pipelines.py</code>是对spider解析后的数据进行插入数据库等等操作的地方。<code>middlewares.py</code>可以自己定义一些中间件处理user_agent和header等等。最后spider目录下就是要写具体的spider啦!下面我们看下代码，代码中有相应的注释。</p>
+<h4 id="Spider"><a href="#Spider" class="headerlink" title="Spider"></a>Spider</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># -*- coding: utf-8 -*-</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> scrapy</span><br><span class="line"><span class="keyword">from</span> bs4 <span class="keyword">import</span> BeautifulSoup</span><br><span class="line"><span class="keyword">from</span> doubantop.items <span class="keyword">import</span> DoubantopItem</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">DoubanTopSpider</span><span class="params">(scrapy)</span>:</span></span><br><span class="line">    name = <span class="string">'doubantop'</span></span><br><span class="line">    start_urls = [<span class="string">'https://movie.douban.com/top250?start=0'</span>]</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">parse_content</span><span class="params">(self, response)</span>:</span></span><br><span class="line">        <span class="comment">#beautifulSoup是一个非常强大，简便的python库</span></span><br><span class="line">        soup = BeautifulSoup(response.body, <span class="string">"lxml"</span>)</span><br><span class="line"></span><br><span class="line">        <span class="keyword">print</span> soup.prettify()</span><br></pre></td></tr></table></figure>
+          <div class="read-more">
+            <a href="/2018/05/17/用scrapy写一个简单的爬虫/" class="read-more-link">阅读更多</a>
+          </div>
+        
+      
+    </div>
+
+    
+
+    
+
+  </article>
+
+    
+      
+  <article class="post">
+    <header class="post-header">
+      <h1 class="post-title">
+        
           <a class="post-link" href="/2018/05/16/简单聊聊scrapy/">简单聊聊scrapy</a>
         
       </h1>

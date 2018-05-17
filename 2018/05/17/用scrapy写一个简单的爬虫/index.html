@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="">
+  <head>
+    
+<meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+<meta name="theme-color" content="#f8f5ec" />
+<meta name="msapplication-navbutton-color" content="#f8f5ec">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="#f8f5ec">
+
+
+
+  <meta name="description" content="用scrapy写一个简单的爬虫"/>
+
+
+
+
+  <meta name="keywords" content="Python, HelloZZZC's blog" />
+
+
+
+
+
+
+
+
+
+
+  <link rel="alternate" href="/atom.xml" title="HelloZZZC's blog">
+
+
+
+
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=2.6.0" />
+
+
+
+<link rel="canonical" href="http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/"/>
+
+
+<link rel="stylesheet" type="text/css" href="/css/style.css?v=2.6.0" />
+
+
+
+  <link rel="stylesheet" type="text/css" href="/lib/fancybox/jquery.fancybox.css" />
+
+
+
+
+  
+
+
+
+  <script id="baidu_push">
+(function(){
+    var bp = document.createElement('script');
+    var curProtocol = window.location.protocol.split(':')[0];
+    if (curProtocol === 'https') {
+        bp.src = 'https://zz.bdstatic.com/linksubmit/push.js';
+    }
+    else {
+        bp.src = 'http://push.zhanzhang.baidu.com/push.js';
+    }
+    var s = document.getElementsByTagName("script")[0];
+    s.parentNode.insertBefore(bp, s);
+})();
+</script>
+
+
+
+
+
+
+
+
+
+    <title> 用scrapy写一个简单的爬虫 - HelloZZZC's blog </title>
+  </head>
+
+  <body><div id="mobile-navbar" class="mobile-navbar">
+  <div class="mobile-header-logo">
+    <a href="/." class="logo">HelloZZZC's blog</a>
+  </div>
+  <div class="mobile-navbar-icon">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+</div>
+
+<nav id="mobile-menu" class="mobile-menu slideout-menu">
+  <ul class="mobile-menu-list">
+    
+      <a href="/">
+        <li class="mobile-menu-item">
+          
+          
+            首页
+          
+        </li>
+      </a>
+    
+      <a href="/archives/">
+        <li class="mobile-menu-item">
+          
+          
+            归档
+          
+        </li>
+      </a>
+    
+      <a href="/tags">
+        <li class="mobile-menu-item">
+          
+          
+            标签
+          
+        </li>
+      </a>
+    
+  </ul>
+</nav>
+
+    <div class="container" id="mobile-panel">
+      <header id="header" class="header"><div class="logo-wrapper">
+  <a href="/." class="logo">HelloZZZC's blog</a>
+</div>
+
+<nav class="site-navbar">
+  
+    <ul id="menu" class="menu">
+      
+        <li class="menu-item">
+          <a class="menu-item-link" href="/">
+            
+            
+              首页
+            
+          </a>
+        </li>
+      
+        <li class="menu-item">
+          <a class="menu-item-link" href="/archives/">
+            
+            
+              归档
+            
+          </a>
+        </li>
+      
+        <li class="menu-item">
+          <a class="menu-item-link" href="/tags">
+            
+            
+              标签
+            
+          </a>
+        </li>
+      
+    </ul>
+  
+</nav>
+
+      </header>
+
+      <main id="main" class="main">
+        <div class="content-wrapper">
+          <div id="content" class="content">
+            
+  
+  <article class="post">
+    <header class="post-header">
+      <h1 class="post-title">
+        
+          用scrapy写一个简单的爬虫
+        
+      </h1>
+
+      <div class="post-meta">
+        <span class="post-time">
+          2018-05-17
+        </span>
+        
+        
+      </div>
+    </header>
+
+    
+    
+  <div class="post-toc" id="post-toc">
+    <h2 class="post-toc-title">文章目录</h2>
+    <div class="post-toc-content">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#爬取豆瓣Top250的电影"><span class="toc-text">爬取豆瓣Top250的电影</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Spider"><span class="toc-text">Spider</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#DoubantopItem"><span class="toc-text">DoubantopItem</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#DbHelper"><span class="toc-text">DbHelper</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#DoubantopPipeline"><span class="toc-text">DoubantopPipeline</span></a></li></ol></li></ol>
+    </div>
+  </div>
+
+
+    <div class="post-content">
+      
+        <h3 id="爬取豆瓣Top250的电影"><a href="#爬取豆瓣Top250的电影" class="headerlink" title="爬取豆瓣Top250的电影"></a>爬取豆瓣Top250的电影</h3><p>即上次发的《简单聊聊scrapy》这次要写一些具体操作啦！首现当然是要创建一个project<code>scrapy startproject doubantop</code>。执行完命令之后就会看到项目文件夹，下面就讲几个比较重要的文件。<code>settings.py</code>是这个项目的配置文件，里面包含了User_Agent、Cookie、还有一些中间件的配置、还可以自己写入一些配置比如mysql的的配置（主要是因为我用的是mysql，有兴趣的话可以用mongodb）。<code>pipelines.py</code>是对spider解析后的数据进行插入数据库等等操作的地方。<code>middlewares.py</code>可以自己定义一些中间件处理user_agent和header等等。最后spider目录下就是要写具体的spider啦!下面我们看下代码，代码中有相应的注释。</p>
+<h4 id="Spider"><a href="#Spider" class="headerlink" title="Spider"></a>Spider</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># -*- coding: utf-8 -*-</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> scrapy</span><br><span class="line"><span class="keyword">from</span> bs4 <span class="keyword">import</span> BeautifulSoup</span><br><span class="line"><span class="keyword">from</span> doubantop.items <span class="keyword">import</span> DoubantopItem</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">DoubanTopSpider</span><span class="params">(scrapy)</span>:</span></span><br><span class="line">    name = <span class="string">'doubantop'</span></span><br><span class="line">    start_urls = [<span class="string">'https://movie.douban.com/top250?start=0'</span>]</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">parse_content</span><span class="params">(self, response)</span>:</span></span><br><span class="line">        <span class="comment">#beautifulSoup是一个非常强大，简便的python库</span></span><br><span class="line">        soup = BeautifulSoup(response.body, <span class="string">"lxml"</span>)</span><br><span class="line"></span><br><span class="line">        <span class="keyword">print</span> soup.prettify()</span><br></pre></td></tr></table></figure>
+<a id="more"></a>
+<h4 id="DoubantopItem"><a href="#DoubantopItem" class="headerlink" title="DoubantopItem"></a>DoubantopItem</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> scrapy</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">DoubantopItem</span><span class="params">(scrapy.Item)</span>:</span></span><br><span class="line">    <span class="comment"># define the fields for your item here like:</span></span><br><span class="line">    <span class="comment">#定义你要爬取的字段就像下面一下</span></span><br><span class="line">    picPath = scrapy.Field()</span><br><span class="line">    rank = scrapy.Field()</span><br><span class="line">    title = scrapy.Field()</span><br><span class="line">    info = scrapy.Field()</span><br><span class="line">    score = scrapy.Field()</span><br><span class="line">    evaluateNum = scrapy.Field()</span><br><span class="line">    inq = scrapy.Field()</span><br></pre></td></tr></table></figure>
+<h4 id="DbHelper"><a href="#DbHelper" class="headerlink" title="DbHelper"></a>DbHelper</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/python</span></span><br><span class="line"><span class="comment"># -*- coding: utf-8 -*-</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> MySQLdb</span><br><span class="line"><span class="keyword">from</span> scrapy.utils.project <span class="keyword">import</span> get_project_settings</span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line"><span class="comment">#定义一个数据库操作的类</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">DbHelper</span><span class="params">()</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">__init__</span><span class="params">(self)</span>:</span></span><br><span class="line">        self.settings = get_project_settings()</span><br><span class="line">        self.host = self.settings[<span class="string">'MYSQL_HOST'</span>]</span><br><span class="line">        self.port = self.settings[<span class="string">'MYSQL_PORT'</span>]</span><br><span class="line">        self.user = self.settings[<span class="string">'MYSQL_USER'</span>]</span><br><span class="line">        self.passwd = self.settings[<span class="string">'MYSQL_PASSWORD'</span>]</span><br><span class="line">        self.db = self.settings[<span class="string">'MYSQL_DBNAME'</span>]</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">connection</span><span class="params">(self)</span>:</span></span><br><span class="line">        conn = MySQLdb.connect(</span><br><span class="line">            host = self.host,</span><br><span class="line">            user = self.user,</span><br><span class="line">            passwd = self.passwd,</span><br><span class="line">            db = self.db</span><br><span class="line">        )</span><br><span class="line">        <span class="keyword">return</span> conn</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">excuteSql</span><span class="params">(self, sql, params)</span>:</span></span><br><span class="line">        conn = self.connection();</span><br><span class="line">        cur = conn.cursor()</span><br><span class="line">        cur.execute(sql,params)</span><br><span class="line">        conn.commit()</span><br><span class="line">        cur.close()</span><br><span class="line">        conn.close()</span><br></pre></td></tr></table></figure>
+<h4 id="DoubantopPipeline"><a href="#DoubantopPipeline" class="headerlink" title="DoubantopPipeline"></a>DoubantopPipeline</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> doubantop.dbhelper <span class="keyword">import</span> DbHelper</span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line"><span class="comment">#在Pipeline中将我们爬取到的数据存储到数据库中，这里就用到了我们写的dbhelper类</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">DoubantopPipeline</span><span class="params">(object)</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">process_item</span><span class="params">(self, item, spider)</span>:</span></span><br><span class="line">        self.insert_item(item)</span><br><span class="line">        <span class="keyword">return</span> item</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">insert_item</span><span class="params">(self, item)</span>:</span></span><br><span class="line">        sql = <span class="string">"INSERT INTO `movie` ( `title`, `picPath`, `rank`, `info`, `score`, `evaluateNum`, `inq`, `createdTime`, `updatedTime`) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"</span></span><br><span class="line">        params = (item[<span class="string">'title'</span>], item[<span class="string">'picPath'</span>], item[<span class="string">'rank'</span>], item[<span class="string">'info'</span>], item[<span class="string">'score'</span>], item[<span class="string">'evaluateNum'</span>], item[<span class="string">'inq'</span>], int(time.time()), int(time.time()))</span><br><span class="line">        dbHelper = DbHelper()</span><br><span class="line">        dbHelper.excuteSql(sql, params)</span><br></pre></td></tr></table></figure>
+<p>以上只是讲了一下每个类具体作用，当你了解他们的时候你就能自己写一个简单的爬虫了，当然爬虫比较关键的还是跟程序猿斗智斗勇啊，他们可不会让你这么简单就把页面给爬了，所以为了防止被Ban你还要了解为你的爬虫加入UserAgent池,Ip池，模拟登陆等等，具体爬取豆瓣top250的项目地址在github上，下面附上项目地址。<br>—— <a href="https://github.com/HelloZZZC/scrapy-doubantop250" target="_blank" rel="noopener">豆瓣Top250电影爬虫项目</a></p>
+
+      
+    </div>
+
+    
+      
+      
+
+  <div class="post-copyright">
+    <p class="copyright-item">
+      <span>原文作者: </span>
+      <a href="http://hellozzzc.github.io">HelloZZZC</a>
+    </p>
+    <p class="copyright-item">
+      <span>原文链接: </span>
+      <a href="http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/">http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/</a>
+    </p>
+    <p class="copyright-item">
+      <span>许可协议: </span>
+      
+      <a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>
+    </p>
+  </div>
+
+
+
+      
+      
+    
+
+    
+      <footer class="post-footer">
+        
+          <div class="post-tags">
+            
+              <a href="/tags/Python/">Python</a>
+            
+          </div>
+        
+        
+        
+  <nav class="post-nav">
+    
+    
+      <a class="next" href="/2018/05/16/简单聊聊scrapy/">
+        <span class="next-text nav-default">简单聊聊scrapy</span>
+        <span class="prev-text nav-mobile">下一篇</span>
+        <i class="iconfont icon-right"></i>
+      </a>
+    
+  </nav>
+
+      </footer>
+    
+
+  </article>
+
+
+          </div>
+          
+  <div class="comments" id="comments">
+    
+      <div id="disqus_thread">
+        <noscript>
+          Please enable JavaScript to view the
+          <a href="//disqus.com/?ref_noscript">comments powered by Disqus.</a>
+        </noscript>
+      </div>
+    
+  </div>
+
+
+        </div>
+      </main>
+
+      <footer id="footer" class="footer">
+
+  <div class="social-links">
+    
+      
+        
+          <a href="mailto:zc19940702@gmail.com" class="iconfont icon-email" title="email"></a>
+        
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+        
+          <a href="https://github.com/HelloZZZC" class="iconfont icon-github" title="github"></a>
+        
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+    
+    
+  </div>
+
+
+<div class="copyright">
+  <span class="power-by">
+    由 <a class="hexo-link" href="https://hexo.io/">Hexo</a> 强力驱动
+  </span>
+  <span class="division">|</span>
+  <span class="theme-info">
+    主题 - 
+    <a class="theme-link" href="https://github.com/ahonn/hexo-theme-even">Even</a>
+  </span>
+
+  <span class="copyright-year">
+    
+    &copy; 
+     
+      2015 - 
+    
+    2018
+
+    <span class="heart">
+      <i class="iconfont icon-heart"></i>
+    </span>
+    <span class="author">HelloZZZC</span>
+  </span>
+</div>
+
+      </footer>
+
+      <div class="back-to-top" id="back-to-top">
+        <i class="iconfont icon-up"></i>
+      </div>
+    </div>
+
+    
+  
+  <script type="text/javascript">
+    var disqus_config = function () {
+        this.page.url = 'http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/';
+        this.page.identifier = '2018/05/17/用scrapy写一个简单的爬虫/';
+        this.page.title = '用scrapy写一个简单的爬虫';
+    };
+    (function() {
+    var d = document, s = d.createElement('script');
+
+    s.src = '//hellozzzc.disqus.com/embed.js';
+
+    s.setAttribute('data-timestamp', +new Date());
+    (d.head || d.body).appendChild(s);
+    })();  
+  </script>
+
+  
+
+  
+
+
+
+    
+  
+
+
+
+
+
+  
+    <script type="text/javascript" src="/lib/jquery/jquery-3.1.1.min.js"></script>
+  
+
+  
+    <script type="text/javascript" src="/lib/slideout/slideout.js"></script>
+  
+
+  
+    <script type="text/javascript" src="/lib/fancybox/jquery.fancybox.pack.js"></script>
+  
+
+
+    <script type="text/javascript" src="/js/src/even.js?v=2.6.0"></script>
+<script type="text/javascript" src="/js/src/bootstrap.js?v=2.6.0"></script>
+
+  </body>
+</html>
