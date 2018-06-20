@@ -179,6 +179,51 @@
     <header class="post-header">
       <h1 class="post-title">
         
+          <a class="post-link" href="/2018/06/20/基于Edusoho随意写写的shell脚本/">基于Edusoho随意写写的shell脚本</a>
+        
+      </h1>
+
+      <div class="post-meta">
+        <span class="post-time">
+          2018-06-20
+        </span>
+        
+        
+      </div>
+    </header>
+
+    
+    
+
+    <div class="post-content">
+      
+        
+        
+          
+        
+
+        
+          <h3 id="Edusoho单元测试执行脚本"><a href="#Edusoho单元测试执行脚本" class="headerlink" title="Edusoho单元测试执行脚本"></a>Edusoho单元测试执行脚本</h3><p>首先说明下做这件事情的原因，因为某天自己在跑单元测试的时候单元测试量过大超过了<code>php.ini</code>中定义的<code>memory_limit=128M</code>导致单元测试跑到第300多个就跑不动了(ps:emmmm….总共有3000多个)，导致我只能一个文件一个文件复制文件路径去执行脚本….真的太多了整个过程就很烦躁，所以等东西全部做完的时候我想到了写一个脚本去执行指定目录下面的所有单元测试文件。大致整个过程就是这样下面附上shell脚本。<br><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/bash</span></span><br><span class="line"><span class="keyword">function</span> <span class="function"><span class="title">runphpunit</span></span>() &#123;</span><br><span class="line">    <span class="keyword">for</span> file <span class="keyword">in</span> `ls <span class="variable">$1</span>`</span><br><span class="line">    <span class="keyword">do</span></span><br><span class="line">        <span class="keyword">if</span> [ -d <span class="variable">$file</span> ]</span><br><span class="line">        <span class="keyword">then</span></span><br><span class="line">            runphpunit <span class="variable">$1</span><span class="string">"/"</span><span class="variable">$file</span></span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            phpunit -c app/ <span class="variable">$1</span><span class="string">"/"</span><span class="variable">$file</span></span><br><span class="line">            <span class="built_in">echo</span> <span class="variable">$1</span><span class="string">"/"</span><span class="variable">$file</span><span class="string">" 单元测试执行成功!"</span></span><br><span class="line">            <span class="built_in">echo</span> <span class="string">"======================================================================="</span></span><br><span class="line">            sleep 1</span><br><span class="line">        <span class="keyword">fi</span></span><br><span class="line">    <span class="keyword">done</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">runphpunit <span class="variable">$1</span></span><br><span class="line"><span class="built_in">echo</span> <span class="string">"finish"</span></span><br></pre></td></tr></table></figure></p>
+<p>执行的命令:sh phpunit-run.sh ./tests/Unit<br>
+          <div class="read-more">
+            <a href="/2018/06/20/基于Edusoho随意写写的shell脚本/" class="read-more-link">阅读更多</a>
+          </div>
+        
+      
+    </div>
+
+    
+
+    
+
+  </article>
+
+    
+      
+  <article class="post">
+    <header class="post-header">
+      <h1 class="post-title">
+        
           <a class="post-link" href="/2018/05/17/用scrapy写一个简单的爬虫/">用scrapy写一个简单的爬虫</a>
         
       </h1>
