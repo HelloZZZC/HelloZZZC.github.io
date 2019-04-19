@@ -1,415 +1,165 @@
+
 <!DOCTYPE html>
-<html lang="">
-  <head>
-    
-<meta charset="UTF-8"/>
-<meta http-equiv="X-UA-Compatible" content="IE=edge" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<html lang="" class="loading">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>简单聊聊scrapy - HelloZZZC&#39;s blog</title>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="google" content="notranslate" />
+    <meta name="keywords" content="HelloZZZC,"> 
+    <meta name="description" content="stay hungry,stay foolish,简单聊聊scrapy（一）在下刚刚接触爬虫不是很久，对爬虫也是因为有点兴趣，再加上朋友希望让我帮他做一个东西才开始学习的python。刚开始的时候在想怎么上手最快啊！没错！当然是直接运用一个成熟的框,"> 
+    <meta name="author" content="HelloZZZC"> 
+    <link rel="alternative" href="atom.xml" title="HelloZZZC&#39;s blog" type="application/atom+xml"> 
+    <link rel="icon" href="/img/favicon.png"> 
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css">
+    <link rel="stylesheet" href="/css/diaspora.css">
+    <script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+    <script>
+         (adsbygoogle = window.adsbygoogle || []).push({
+              google_ad_client: "ca-pub-8691406134231910",
+              enable_page_level_ads: true
+         });
+    </script>
+    <script async custom-element="amp-auto-ads"
+        src="https://cdn.ampproject.org/v0/amp-auto-ads-0.1.js">
+    </script>
+</head>
 
-
-<meta http-equiv="Cache-Control" content="no-transform" />
-<meta http-equiv="Cache-Control" content="no-siteapp" />
-
-<meta name="theme-color" content="#f8f5ec" />
-<meta name="msapplication-navbutton-color" content="#f8f5ec">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="#f8f5ec">
-
-
-
-  <meta name="description" content="简单聊聊scrapy"/>
-
-
-
-
-  <meta name="keywords" content="Python, HelloZZZC's blog" />
-
-
-
-
-
-
-
-
-
-
-  <link rel="alternate" href="/atom.xml" title="HelloZZZC's blog">
-
-
-
-
-  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=2.6.0" />
-
-
-
-<link rel="canonical" href="http://hellozzzc.github.io/2018/05/16/简单聊聊scrapy/"/>
-
-
-<link rel="stylesheet" type="text/css" href="/css/style.css?v=2.6.0" />
-
-
-
-  <link rel="stylesheet" type="text/css" href="/lib/fancybox/jquery.fancybox.css" />
-
-
-
-
-  
-
-
-
-  <script id="baidu_push">
-(function(){
-    var bp = document.createElement('script');
-    var curProtocol = window.location.protocol.split(':')[0];
-    if (curProtocol === 'https') {
-        bp.src = 'https://zz.bdstatic.com/linksubmit/push.js';
-    }
-    else {
-        bp.src = 'http://push.zhanzhang.baidu.com/push.js';
-    }
-    var s = document.getElementsByTagName("script")[0];
-    s.parentNode.insertBefore(bp, s);
-})();
-</script>
-
-
-
-
-
-
-
-
-
-    <title> 简单聊聊scrapy - HelloZZZC's blog </title>
-  </head>
-
-  <body><div id="mobile-navbar" class="mobile-navbar">
-  <div class="mobile-header-logo">
-    <a href="/." class="logo">HelloZZZC's blog</a>
-  </div>
-  <div class="mobile-navbar-icon">
-    <span></span>
-    <span></span>
-    <span></span>
-  </div>
-</div>
-
-<nav id="mobile-menu" class="mobile-menu slideout-menu">
-  <ul class="mobile-menu-list">
-    
-      <a href="/">
-        <li class="mobile-menu-item">
-          
-          
-            首页
-          
-        </li>
-      </a>
-    
-      <a href="/archives/">
-        <li class="mobile-menu-item">
-          
-          
-            归档
-          
-        </li>
-      </a>
-    
-      <a href="/tags">
-        <li class="mobile-menu-item">
-          
-          
-            标签
-          
-        </li>
-      </a>
-    
-  </ul>
-</nav>
-
-    <div class="container" id="mobile-panel">
-      <header id="header" class="header"><div class="logo-wrapper">
-  <a href="/." class="logo">HelloZZZC's blog</a>
-</div>
-
-<nav class="site-navbar">
-  
-    <ul id="menu" class="menu">
-      
-        <li class="menu-item">
-          <a class="menu-item-link" href="/">
-            
-            
-              首页
-            
-          </a>
-        </li>
-      
-        <li class="menu-item">
-          <a class="menu-item-link" href="/archives/">
-            
-            
-              归档
-            
-          </a>
-        </li>
-      
-        <li class="menu-item">
-          <a class="menu-item-link" href="/tags">
-            
-            
-              标签
-            
-          </a>
-        </li>
-      
-    </ul>
-  
-</nav>
-
-      </header>
-
-      <main id="main" class="main">
-        <div class="content-wrapper">
-          <div id="content" class="content">
-            
-  
-  <article class="post">
-    <header class="post-header">
-      <h1 class="post-title">
-        
-          简单聊聊scrapy
-        
-      </h1>
-
-      <div class="post-meta">
-        <span class="post-time">
-          2018-05-16
-        </span>
-        
-        
-      </div>
-    </header>
-
-    
-    
-  <div class="post-toc" id="post-toc">
-    <h2 class="post-toc-title">文章目录</h2>
-    <div class="post-toc-content">
-      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#简单聊聊scrapy（一）"><span class="toc-text">简单聊聊scrapy（一）</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#流程"><span class="toc-text">流程</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#目前常用命令"><span class="toc-text">目前常用命令</span></a></li></ol></li></ol>
+<body class="loading">
+    <span id="config-title" style="display:none">HelloZZZC&#39;s blog</span>
+    <div id="loader"></div>
+    <div id="single">
+    <div id="top" style="display: block;">
+    <div class="bar" style="width: 0;"></div>
+    <a class="icon-home image-icon" href="javascript:;" data-url="http://hellozzzc.github.io"></a>
+    <div title="播放/暂停" class="icon-play"></div>
+    <h3 class="subtitle">简单聊聊scrapy</h3>
+    <div class="social">
+        <!--<div class="like-icon">-->
+            <!--<a href="javascript:;" class="likeThis active"><span class="icon-like"></span><span class="count">76</span></a>-->
+        <!--</div>-->
+        <div>
+            <div class="share">
+                <a title="获取二维码" class="icon-scan" href="javascript:;"></a>
+            </div>
+            <div id="qr"></div>
+        </div>
     </div>
-  </div>
+    <div class="scrollbar"></div>
+</div>
+
+    <div class="section">
+        <div class="article">
+    <div class='main'>
+        <h1 class="title">简单聊聊scrapy</h1>
+        <div class="stuff">
+            <span>五月 16, 2018</span>
+            
+  <ul class="post-tags-list"><li class="post-tags-list-item"><a class="post-tags-list-link" href="/tags/Python/">Python</a></li></ul>
 
 
-    <div class="post-content">
-      
-        <h3 id="简单聊聊scrapy（一）"><a href="#简单聊聊scrapy（一）" class="headerlink" title="简单聊聊scrapy（一）"></a>简单聊聊scrapy（一）</h3><p>在下刚刚接触爬虫不是很久，对爬虫也是因为有点兴趣，再加上朋友希望让我帮他做一个东西才开始学习的python。刚开始的时候在想怎么上手最快啊！没错！当然是直接运用一个成熟的框架，因此才通过google搜到了这个框架。下面就大概聊聊萌新学爬虫吧<br><img src="https://timgsa.baidu.com/timg?image&amp;quality=80&amp;size=b9999_10000&amp;sec=1526492793596&amp;di=eb081d90b729b7729b85c06f7652fb64&amp;imgtype=0&amp;src=http%3A%2F%2Fn1.itc.cn%2Fimg8%2Fwb%2Frecom%2F2016%2F09%2F13%2F147372941431495986.PNG" alt="scrapy framework"><br><a id="more"></a><br>上面这张图就是整个scrapy框架的几个模块，其中Engine就是从中最核心的模块，就算看图也看的出来engine跟这么多模块有交集想想也应该知道他的地位不低。下面就大致说下流程具体的每个模块的作用其实不用我说大家在google中搜索一下也有很多文档中有说明。</p>
+        </div>
+        <div class="content markdown">
+            <h3 id="简单聊聊scrapy（一）"><a href="#简单聊聊scrapy（一）" class="headerlink" title="简单聊聊scrapy（一）"></a>简单聊聊scrapy（一）</h3><p>在下刚刚接触爬虫不是很久，对爬虫也是因为有点兴趣，再加上朋友希望让我帮他做一个东西才开始学习的python。刚开始的时候在想怎么上手最快啊！没错！当然是直接运用一个成熟的框架，因此才通过google搜到了这个框架。下面就大概聊聊萌新学爬虫吧<br><img src="https://timgsa.baidu.com/timg?image&amp;quality=80&amp;size=b9999_10000&amp;sec=1526492793596&amp;di=eb081d90b729b7729b85c06f7652fb64&amp;imgtype=0&amp;src=http%3A%2F%2Fn1.itc.cn%2Fimg8%2Fwb%2Frecom%2F2016%2F09%2F13%2F147372941431495986.PNG" alt="scrapy framework"><br><a id="more"></a><br>上面这张图就是整个scrapy框架的几个模块，其中Engine就是从中最核心的模块，就算看图也看的出来engine跟这么多模块有交集想想也应该知道他的地位不低。下面就大致说下流程具体的每个模块的作用其实不用我说大家在google中搜索一下也有很多文档中有说明。</p>
 <h4 id="流程"><a href="#流程" class="headerlink" title="流程"></a>流程</h4><p>用户(我):我要爬一个xxxx网站!<br>Engine: 没问题!包在我身上!<br>Engine:xxxx网站spider!给我第一个要爬取的url<br>xxxx网站spider:好的！要爬的url是xxxx.com<br>Engine:好的！收到了，我去让Scheduler帮我准备一下这个request<br>Scheduler:准备好了！这是处理过的request<br>Engine:好的收到了，我让Downloader帮我下载页面，并把Reponse给我<br>Downloader:Engine你要的Response我已经弄好了，现在就给你<br>Engine:好的收到了，我现在就让Spider去处理数据<br>Spider:收到Response了，现在分析好数据就交给ItemPipeline，如果还有要跟进的request，Engine你继续跟进<br>ItemPipeline:接收到数据了，现在进行去重，持久化，写入数据库的操作<br>以上就是自己总结的流程，写的不是很好大家有问题大家可以一起提出来一起探讨探讨。</p>
 <h4 id="目前常用命令"><a href="#目前常用命令" class="headerlink" title="目前常用命令"></a>目前常用命令</h4><p><code>scrapy startproject xxxx</code> 创建项目<br><code>scrapy crawl xxxx</code> 运行相应的爬虫  </p>
 <p>今天就大概讲讲流程和刚开始常用的2个命令，之后通过一个例子大致讲一下简单的去爬一个网站。最后提一个建议:mac用户最好去装一个<code>virtualenv</code>避免影响自己的环境。</p>
 
-      
-    </div>
-
-    
-      
-      
-
-  <div class="post-copyright">
-    <p class="copyright-item">
-      <span>原文作者: </span>
-      <a href="http://hellozzzc.github.io">HelloZZZC</a>
-    </p>
-    <p class="copyright-item">
-      <span>原文链接: </span>
-      <a href="http://hellozzzc.github.io/2018/05/16/简单聊聊scrapy/">http://hellozzzc.github.io/2018/05/16/简单聊聊scrapy/</a>
-    </p>
-    <p class="copyright-item">
-      <span>许可协议: </span>
-      
-      <a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>
-    </p>
-  </div>
-
-
-
-      
-      
-    
-
-    
-      <footer class="post-footer">
-        
-          <div class="post-tags">
+            <!--[if lt IE 9]><script>document.createElement('audio');</script><![endif]-->
+            <audio id="audio" loop="1" preload="auto" controls="controls" data-autoplay="false">
+                <source type="audio/mpeg" src="">
+            </audio>
             
-              <a href="/tags/Python/">Python</a>
+                <ul id="audio-list" style="display:none">
+                    
+                        <li title='0' data-url='http://link.hhtjim.com/163/5146554.mp3'></li>
+                    
+                        <li title='1' data-url='http://link.hhtjim.com/qq/001faIUs4M2zna.mp3'></li>
+                    
+                </ul>
             
-          </div>
-        
-        
-        
-  <nav class="post-nav">
-    
-      <a class="prev" href="/2018/05/17/用scrapy写一个简单的爬虫/">
-        <i class="iconfont icon-left"></i>
-        <span class="prev-text nav-default">用scrapy写一个简单的爬虫</span>
-        <span class="prev-text nav-mobile">上一篇</span>
-      </a>
-    
-    
-      <a class="next" href="/2018/04/25/PHP-Socket编程/">
-        <span class="next-text nav-default">PHP Socket编程</span>
-        <span class="prev-text nav-mobile">下一篇</span>
-        <i class="iconfont icon-right"></i>
-      </a>
-    
-  </nav>
-
-      </footer>
-    
-
-  </article>
-
-
-          </div>
-          
-  <div class="comments" id="comments">
-    
-      <div id="disqus_thread">
-        <noscript>
-          Please enable JavaScript to view the
-          <a href="//disqus.com/?ref_noscript">comments powered by Disqus.</a>
-        </noscript>
-      </div>
-    
-  </div>
-
-
         </div>
-      </main>
-
-      <footer id="footer" class="footer">
-
-  <div class="social-links">
-    
-      
         
-          <a href="mailto:zc19940702@gmail.com" class="iconfont icon-email" title="email"></a>
-        
-      
-    
-      
-    
-      
-    
-      
-    
-      
-    
-      
-    
-      
-        
-          <a href="https://github.com/HelloZZZC" class="iconfont icon-github" title="github"></a>
-        
-      
-    
-      
-    
-      
-    
-      
-    
-      
-    
-      
-    
-      
-    
-    
-    
-  </div>
+    <div id='gitalk-container' class="comment link"
+        data-ae='false'
+        data-ci=''
+        data-cs=''
+        data-r=''
+        data-o=''
+        data-a=''
+        data-d='false'
+    >查看评论</div>
 
 
-<div class="copyright">
-  <span class="power-by">
-    由 <a class="hexo-link" href="https://hexo.io/">Hexo</a> 强力驱动
-  </span>
-  <span class="division">|</span>
-  <span class="theme-info">
-    主题 - 
-    <a class="theme-link" href="https://github.com/ahonn/hexo-theme-even">Even</a>
-  </span>
-
-  <span class="copyright-year">
+    </div>
     
-    &copy; 
-     
-      2015 - 
-    
-    2018
-
-    <span class="heart">
-      <i class="iconfont icon-heart"></i>
-    </span>
-    <span class="author">HelloZZZC</span>
-  </span>
 </div>
 
-      </footer>
 
-      <div class="back-to-top" id="back-to-top">
-        <i class="iconfont icon-up"></i>
-      </div>
     </div>
+</div>
+</body>
+<script src="//cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js"></script>
+<script src="//lib.baomitu.com/jquery/1.8.3/jquery.min.js"></script>
+<script src="/js/plugin.js"></script>
+<script src="/js/diaspora.js"></script>
+<link rel="stylesheet" href="/photoswipe/photoswipe.css">
+<link rel="stylesheet" href="/photoswipe/default-skin/default-skin.css">
+<script src="/photoswipe/photoswipe.min.js"></script>
+<script src="/photoswipe/photoswipe-ui-default.min.js"></script>
 
-    
-  
-  <script type="text/javascript">
-    var disqus_config = function () {
-        this.page.url = 'http://hellozzzc.github.io/2018/05/16/简单聊聊scrapy/';
-        this.page.identifier = '2018/05/16/简单聊聊scrapy/';
-        this.page.title = '简单聊聊scrapy';
-    };
-    (function() {
-    var d = document, s = d.createElement('script');
+<!-- Root element of PhotoSwipe. Must have class pswp. -->
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+    <!-- Background of PhotoSwipe. 
+         It's a separate element as animating opacity is faster than rgba(). -->
+    <div class="pswp__bg"></div>
+    <!-- Slides wrapper with overflow:hidden. -->
+    <div class="pswp__scroll-wrap">
+        <!-- Container that holds slides. 
+            PhotoSwipe keeps only 3 of them in the DOM to save memory.
+            Don't modify these 3 pswp__item elements, data is added later on. -->
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+        <!-- Default (PhotoSwipeUI_Default) interface on top of sliding area. Can be changed. -->
+        <div class="pswp__ui pswp__ui--hidden">
+            <div class="pswp__top-bar">
+                <!--  Controls are self-explanatory. Order can be changed. -->
+                <div class="pswp__counter"></div>
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+                <!-- Preloader demo http://codepen.io/dimsemenov/pen/yyBWoR -->
+                <!-- element will get class pswp__preloader--active when preloader is running -->
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                      <div class="pswp__preloader__cut">
+                        <div class="pswp__preloader__donut"></div>
+                      </div>
+                    </div>
+                </div>
+            </div>
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div> 
+            </div>
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+        </div>
+    </div>
+</div>
 
-    s.src = '//hellozzzc.disqus.com/embed.js';
-
-    s.setAttribute('data-timestamp', +new Date());
-    (d.head || d.body).appendChild(s);
-    })();  
-  </script>
-
-  
-
-  
 
 
 
-    
-  
-
-
-
-
-
-  
-    <script type="text/javascript" src="/lib/jquery/jquery-3.1.1.min.js"></script>
-  
-
-  
-    <script type="text/javascript" src="/lib/slideout/slideout.js"></script>
-  
-
-  
-    <script type="text/javascript" src="/lib/fancybox/jquery.fancybox.pack.js"></script>
-  
-
-
-    <script type="text/javascript" src="/js/src/even.js?v=2.6.0"></script>
-<script type="text/javascript" src="/js/src/bootstrap.js?v=2.6.0"></script>
-
-  </body>
 </html>

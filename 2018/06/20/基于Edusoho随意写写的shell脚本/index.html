@@ -1,414 +1,164 @@
+
 <!DOCTYPE html>
-<html lang="">
-  <head>
-    
-<meta charset="UTF-8"/>
-<meta http-equiv="X-UA-Compatible" content="IE=edge" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<html lang="" class="loading">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>基于Edusoho随意写写的shell脚本 - HelloZZZC&#39;s blog</title>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="google" content="notranslate" />
+    <meta name="keywords" content="HelloZZZC,"> 
+    <meta name="description" content="stay hungry,stay foolish,Edusoho单元测试执行脚本首先说明下做这件事情的原因，因为某天自己在跑单元测试的时候单元测试量过大超过了php.ini中定义的memory_limit=128M导致单元测试跑到第300多个就跑不,"> 
+    <meta name="author" content="HelloZZZC"> 
+    <link rel="alternative" href="atom.xml" title="HelloZZZC&#39;s blog" type="application/atom+xml"> 
+    <link rel="icon" href="/img/favicon.png"> 
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css">
+    <link rel="stylesheet" href="/css/diaspora.css">
+    <script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+    <script>
+         (adsbygoogle = window.adsbygoogle || []).push({
+              google_ad_client: "ca-pub-8691406134231910",
+              enable_page_level_ads: true
+         });
+    </script>
+    <script async custom-element="amp-auto-ads"
+        src="https://cdn.ampproject.org/v0/amp-auto-ads-0.1.js">
+    </script>
+</head>
 
-
-<meta http-equiv="Cache-Control" content="no-transform" />
-<meta http-equiv="Cache-Control" content="no-siteapp" />
-
-<meta name="theme-color" content="#f8f5ec" />
-<meta name="msapplication-navbutton-color" content="#f8f5ec">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="#f8f5ec">
-
-
-
-  <meta name="description" content="基于Edusoho随意写写的shell脚本"/>
-
-
-
-
-  <meta name="keywords" content="Shell, HelloZZZC's blog" />
-
-
-
-
-
-
-
-
-
-
-  <link rel="alternate" href="/atom.xml" title="HelloZZZC's blog">
-
-
-
-
-  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=2.6.0" />
-
-
-
-<link rel="canonical" href="http://hellozzzc.github.io/2018/06/20/基于Edusoho随意写写的shell脚本/"/>
-
-
-<link rel="stylesheet" type="text/css" href="/css/style.css?v=2.6.0" />
-
-
-
-  <link rel="stylesheet" type="text/css" href="/lib/fancybox/jquery.fancybox.css" />
-
-
-
-
-  
-
-
-
-  <script id="baidu_push">
-(function(){
-    var bp = document.createElement('script');
-    var curProtocol = window.location.protocol.split(':')[0];
-    if (curProtocol === 'https') {
-        bp.src = 'https://zz.bdstatic.com/linksubmit/push.js';
-    }
-    else {
-        bp.src = 'http://push.zhanzhang.baidu.com/push.js';
-    }
-    var s = document.getElementsByTagName("script")[0];
-    s.parentNode.insertBefore(bp, s);
-})();
-</script>
-
-
-
-
-
-
-
-
-
-    <title> 基于Edusoho随意写写的shell脚本 - HelloZZZC's blog </title>
-  </head>
-
-  <body><div id="mobile-navbar" class="mobile-navbar">
-  <div class="mobile-header-logo">
-    <a href="/." class="logo">HelloZZZC's blog</a>
-  </div>
-  <div class="mobile-navbar-icon">
-    <span></span>
-    <span></span>
-    <span></span>
-  </div>
+<body class="loading">
+    <span id="config-title" style="display:none">HelloZZZC&#39;s blog</span>
+    <div id="loader"></div>
+    <div id="single">
+    <div id="top" style="display: block;">
+    <div class="bar" style="width: 0;"></div>
+    <a class="icon-home image-icon" href="javascript:;" data-url="http://hellozzzc.github.io"></a>
+    <div title="播放/暂停" class="icon-play"></div>
+    <h3 class="subtitle">基于Edusoho随意写写的shell脚本</h3>
+    <div class="social">
+        <!--<div class="like-icon">-->
+            <!--<a href="javascript:;" class="likeThis active"><span class="icon-like"></span><span class="count">76</span></a>-->
+        <!--</div>-->
+        <div>
+            <div class="share">
+                <a title="获取二维码" class="icon-scan" href="javascript:;"></a>
+            </div>
+            <div id="qr"></div>
+        </div>
+    </div>
+    <div class="scrollbar"></div>
 </div>
 
-<nav id="mobile-menu" class="mobile-menu slideout-menu">
-  <ul class="mobile-menu-list">
-    
-      <a href="/">
-        <li class="mobile-menu-item">
-          
-          
-            首页
-          
-        </li>
-      </a>
-    
-      <a href="/archives/">
-        <li class="mobile-menu-item">
-          
-          
-            归档
-          
-        </li>
-      </a>
-    
-      <a href="/tags">
-        <li class="mobile-menu-item">
-          
-          
-            标签
-          
-        </li>
-      </a>
-    
-  </ul>
-</nav>
-
-    <div class="container" id="mobile-panel">
-      <header id="header" class="header"><div class="logo-wrapper">
-  <a href="/." class="logo">HelloZZZC's blog</a>
-</div>
-
-<nav class="site-navbar">
-  
-    <ul id="menu" class="menu">
-      
-        <li class="menu-item">
-          <a class="menu-item-link" href="/">
+    <div class="section">
+        <div class="article">
+    <div class='main'>
+        <h1 class="title">基于Edusoho随意写写的shell脚本</h1>
+        <div class="stuff">
+            <span>六月 20, 2018</span>
             
-            
-              首页
-            
-          </a>
-        </li>
-      
-        <li class="menu-item">
-          <a class="menu-item-link" href="/archives/">
-            
-            
-              归档
-            
-          </a>
-        </li>
-      
-        <li class="menu-item">
-          <a class="menu-item-link" href="/tags">
-            
-            
-              标签
-            
-          </a>
-        </li>
-      
-    </ul>
-  
-</nav>
-
-      </header>
-
-      <main id="main" class="main">
-        <div class="content-wrapper">
-          <div id="content" class="content">
-            
-  
-  <article class="post">
-    <header class="post-header">
-      <h1 class="post-title">
-        
-          基于Edusoho随意写写的shell脚本
-        
-      </h1>
-
-      <div class="post-meta">
-        <span class="post-time">
-          2018-06-20
-        </span>
-        
-        
-      </div>
-    </header>
-
-    
-    
-  <div class="post-toc" id="post-toc">
-    <h2 class="post-toc-title">文章目录</h2>
-    <div class="post-toc-content">
-      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#Edusoho单元测试执行脚本"><span class="toc-text">Edusoho单元测试执行脚本</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#最后的补充"><span class="toc-text">最后的补充</span></a></li></ol>
-    </div>
-  </div>
-
-
-    <div class="post-content">
-      
-        <h3 id="Edusoho单元测试执行脚本"><a href="#Edusoho单元测试执行脚本" class="headerlink" title="Edusoho单元测试执行脚本"></a>Edusoho单元测试执行脚本</h3><p>首先说明下做这件事情的原因，因为某天自己在跑单元测试的时候单元测试量过大超过了<code>php.ini</code>中定义的<code>memory_limit=128M</code>导致单元测试跑到第300多个就跑不动了(ps:emmmm….总共有3000多个)，导致我只能一个文件一个文件复制文件路径去执行脚本….真的太多了整个过程就很烦躁，所以等东西全部做完的时候我想到了写一个脚本去执行指定目录下面的所有单元测试文件。大致整个过程就是这样下面附上shell脚本。<br><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/bash</span></span><br><span class="line"><span class="keyword">function</span> <span class="function"><span class="title">runphpunit</span></span>() &#123;</span><br><span class="line">    <span class="keyword">for</span> file <span class="keyword">in</span> `ls <span class="variable">$1</span>`</span><br><span class="line">    <span class="keyword">do</span></span><br><span class="line">        <span class="keyword">if</span> [ -d <span class="variable">$file</span> ]</span><br><span class="line">        <span class="keyword">then</span></span><br><span class="line">            runphpunit <span class="variable">$1</span><span class="string">"/"</span><span class="variable">$file</span></span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            phpunit -c app/ <span class="variable">$1</span><span class="string">"/"</span><span class="variable">$file</span></span><br><span class="line">            <span class="built_in">echo</span> <span class="variable">$1</span><span class="string">"/"</span><span class="variable">$file</span><span class="string">" 单元测试执行成功!"</span></span><br><span class="line">            <span class="built_in">echo</span> <span class="string">"======================================================================="</span></span><br><span class="line">            sleep 1</span><br><span class="line">        <span class="keyword">fi</span></span><br><span class="line">    <span class="keyword">done</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">runphpunit <span class="variable">$1</span></span><br><span class="line"><span class="built_in">echo</span> <span class="string">"finish"</span></span><br></pre></td></tr></table></figure></p>
-<p>执行的命令:sh phpunit-run.sh ./tests/Unit<br><a id="more"></a></p>
-<h3 id="最后的补充"><a href="#最后的补充" class="headerlink" title="最后的补充"></a>最后的补充</h3><p>最后上网查了phpunit的官方文档上面很明确的说明通过<code>ini_set</code>就可以设置一些属性或者在xml文件中添加<code>&lt;ini name=&quot;memory_limit&quot; value=&quot;1073741824&quot;/&gt;</code>就不回出现那样的问题了，突然觉得好像多此一举了(哈哈哈哈哈哈嗝)。</p>
-
-      
-    </div>
-
-    
-      
-      
-
-  <div class="post-copyright">
-    <p class="copyright-item">
-      <span>原文作者: </span>
-      <a href="http://hellozzzc.github.io">HelloZZZC</a>
-    </p>
-    <p class="copyright-item">
-      <span>原文链接: </span>
-      <a href="http://hellozzzc.github.io/2018/06/20/基于Edusoho随意写写的shell脚本/">http://hellozzzc.github.io/2018/06/20/基于Edusoho随意写写的shell脚本/</a>
-    </p>
-    <p class="copyright-item">
-      <span>许可协议: </span>
-      
-      <a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a>
-    </p>
-  </div>
-
-
-
-      
-      
-    
-
-    
-      <footer class="post-footer">
-        
-          <div class="post-tags">
-            
-              <a href="/tags/Shell/">Shell</a>
-            
-          </div>
-        
-        
-        
-  <nav class="post-nav">
-    
-      <a class="prev" href="/2018/08/26/关于努力不一定会成功，但不努力一定会很轻松的想法/">
-        <i class="iconfont icon-left"></i>
-        <span class="prev-text nav-default">关于努力不一定会成功，但不努力一定会很轻松的想法</span>
-        <span class="prev-text nav-mobile">上一篇</span>
-      </a>
-    
-    
-      <a class="next" href="/2018/05/17/用scrapy写一个简单的爬虫/">
-        <span class="next-text nav-default">用scrapy写一个简单的爬虫</span>
-        <span class="prev-text nav-mobile">下一篇</span>
-        <i class="iconfont icon-right"></i>
-      </a>
-    
-  </nav>
-
-      </footer>
-    
-
-  </article>
-
-
-          </div>
-          
-  <div class="comments" id="comments">
-    
-      <div id="disqus_thread">
-        <noscript>
-          Please enable JavaScript to view the
-          <a href="//disqus.com/?ref_noscript">comments powered by Disqus.</a>
-        </noscript>
-      </div>
-    
-  </div>
+  <ul class="post-tags-list"><li class="post-tags-list-item"><a class="post-tags-list-link" href="/tags/Shell/">Shell</a></li></ul>
 
 
         </div>
-      </main>
+        <div class="content markdown">
+            <h3 id="Edusoho单元测试执行脚本"><a href="#Edusoho单元测试执行脚本" class="headerlink" title="Edusoho单元测试执行脚本"></a>Edusoho单元测试执行脚本</h3><p>首先说明下做这件事情的原因，因为某天自己在跑单元测试的时候单元测试量过大超过了<code>php.ini</code>中定义的<code>memory_limit=128M</code>导致单元测试跑到第300多个就跑不动了(ps:emmmm….总共有3000多个)，导致我只能一个文件一个文件复制文件路径去执行脚本….真的太多了整个过程就很烦躁，所以等东西全部做完的时候我想到了写一个脚本去执行指定目录下面的所有单元测试文件。大致整个过程就是这样下面附上shell脚本。<br><figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#!/bin/bash</span></span><br><span class="line"><span class="keyword">function</span> <span class="function"><span class="title">runphpunit</span></span>() &#123;</span><br><span class="line">    <span class="keyword">for</span> file <span class="keyword">in</span> `ls <span class="variable">$1</span>`</span><br><span class="line">    <span class="keyword">do</span></span><br><span class="line">        <span class="keyword">if</span> [ -d <span class="variable">$file</span> ]</span><br><span class="line">        <span class="keyword">then</span></span><br><span class="line">            runphpunit <span class="variable">$1</span><span class="string">"/"</span><span class="variable">$file</span></span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            phpunit -c app/ <span class="variable">$1</span><span class="string">"/"</span><span class="variable">$file</span></span><br><span class="line">            <span class="built_in">echo</span> <span class="variable">$1</span><span class="string">"/"</span><span class="variable">$file</span><span class="string">" 单元测试执行成功!"</span></span><br><span class="line">            <span class="built_in">echo</span> <span class="string">"======================================================================="</span></span><br><span class="line">            sleep 1</span><br><span class="line">        <span class="keyword">fi</span></span><br><span class="line">    <span class="keyword">done</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">runphpunit <span class="variable">$1</span></span><br><span class="line"><span class="built_in">echo</span> <span class="string">"finish"</span></span><br></pre></td></tr></table></figure></p>
+<p>执行的命令:sh phpunit-run.sh ./tests/Unit<br><a id="more"></a></p>
+<h3 id="最后的补充"><a href="#最后的补充" class="headerlink" title="最后的补充"></a>最后的补充</h3><p>最后上网查了phpunit的官方文档上面很明确的说明通过<code>ini_set</code>就可以设置一些属性或者在xml文件中添加<code>&lt;ini name=&quot;memory_limit&quot; value=&quot;1073741824&quot;/&gt;</code>就不回出现那样的问题了，突然觉得好像多此一举了(哈哈哈哈哈哈嗝)。</p>
 
-      <footer id="footer" class="footer">
-
-  <div class="social-links">
-    
-      
+            <!--[if lt IE 9]><script>document.createElement('audio');</script><![endif]-->
+            <audio id="audio" loop="1" preload="auto" controls="controls" data-autoplay="false">
+                <source type="audio/mpeg" src="">
+            </audio>
+            
+                <ul id="audio-list" style="display:none">
+                    
+                        <li title='0' data-url='http://link.hhtjim.com/163/5146554.mp3'></li>
+                    
+                        <li title='1' data-url='http://link.hhtjim.com/qq/001faIUs4M2zna.mp3'></li>
+                    
+                </ul>
+            
+        </div>
         
-          <a href="mailto:zc19940702@gmail.com" class="iconfont icon-email" title="email"></a>
-        
-      
-    
-      
-    
-      
-    
-      
-    
-      
-    
-      
-    
-      
-        
-          <a href="https://github.com/HelloZZZC" class="iconfont icon-github" title="github"></a>
-        
-      
-    
-      
-    
-      
-    
-      
-    
-      
-    
-      
-    
-      
-    
-    
-    
-  </div>
+    <div id='gitalk-container' class="comment link"
+        data-ae='false'
+        data-ci=''
+        data-cs=''
+        data-r=''
+        data-o=''
+        data-a=''
+        data-d='false'
+    >查看评论</div>
 
 
-<div class="copyright">
-  <span class="power-by">
-    由 <a class="hexo-link" href="https://hexo.io/">Hexo</a> 强力驱动
-  </span>
-  <span class="division">|</span>
-  <span class="theme-info">
-    主题 - 
-    <a class="theme-link" href="https://github.com/ahonn/hexo-theme-even">Even</a>
-  </span>
-
-  <span class="copyright-year">
+    </div>
     
-    &copy; 
-     
-      2015 - 
-    
-    2018
-
-    <span class="heart">
-      <i class="iconfont icon-heart"></i>
-    </span>
-    <span class="author">HelloZZZC</span>
-  </span>
 </div>
 
-      </footer>
 
-      <div class="back-to-top" id="back-to-top">
-        <i class="iconfont icon-up"></i>
-      </div>
     </div>
+</div>
+</body>
+<script src="//cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js"></script>
+<script src="//lib.baomitu.com/jquery/1.8.3/jquery.min.js"></script>
+<script src="/js/plugin.js"></script>
+<script src="/js/diaspora.js"></script>
+<link rel="stylesheet" href="/photoswipe/photoswipe.css">
+<link rel="stylesheet" href="/photoswipe/default-skin/default-skin.css">
+<script src="/photoswipe/photoswipe.min.js"></script>
+<script src="/photoswipe/photoswipe-ui-default.min.js"></script>
 
-    
-  
-  <script type="text/javascript">
-    var disqus_config = function () {
-        this.page.url = 'http://hellozzzc.github.io/2018/06/20/基于Edusoho随意写写的shell脚本/';
-        this.page.identifier = '2018/06/20/基于Edusoho随意写写的shell脚本/';
-        this.page.title = '基于Edusoho随意写写的shell脚本';
-    };
-    (function() {
-    var d = document, s = d.createElement('script');
+<!-- Root element of PhotoSwipe. Must have class pswp. -->
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+    <!-- Background of PhotoSwipe. 
+         It's a separate element as animating opacity is faster than rgba(). -->
+    <div class="pswp__bg"></div>
+    <!-- Slides wrapper with overflow:hidden. -->
+    <div class="pswp__scroll-wrap">
+        <!-- Container that holds slides. 
+            PhotoSwipe keeps only 3 of them in the DOM to save memory.
+            Don't modify these 3 pswp__item elements, data is added later on. -->
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+        <!-- Default (PhotoSwipeUI_Default) interface on top of sliding area. Can be changed. -->
+        <div class="pswp__ui pswp__ui--hidden">
+            <div class="pswp__top-bar">
+                <!--  Controls are self-explanatory. Order can be changed. -->
+                <div class="pswp__counter"></div>
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+                <!-- Preloader demo http://codepen.io/dimsemenov/pen/yyBWoR -->
+                <!-- element will get class pswp__preloader--active when preloader is running -->
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                      <div class="pswp__preloader__cut">
+                        <div class="pswp__preloader__donut"></div>
+                      </div>
+                    </div>
+                </div>
+            </div>
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div> 
+            </div>
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+        </div>
+    </div>
+</div>
 
-    s.src = '//hellozzzc.disqus.com/embed.js';
-
-    s.setAttribute('data-timestamp', +new Date());
-    (d.head || d.body).appendChild(s);
-    })();  
-  </script>
-
-  
-
-  
 
 
 
-    
-  
-
-
-
-
-
-  
-    <script type="text/javascript" src="/lib/jquery/jquery-3.1.1.min.js"></script>
-  
-
-  
-    <script type="text/javascript" src="/lib/slideout/slideout.js"></script>
-  
-
-  
-    <script type="text/javascript" src="/lib/fancybox/jquery.fancybox.pack.js"></script>
-  
-
-
-    <script type="text/javascript" src="/js/src/even.js?v=2.6.0"></script>
-<script type="text/javascript" src="/js/src/bootstrap.js?v=2.6.0"></script>
-
-  </body>
 </html>
