@@ -1,0 +1,170 @@
+
+<!DOCTYPE html>
+<html lang="" class="loading">
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NFS服务在阿里云服务器上的实践 - HelloZZZC&#39;s blog</title>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="google" content="notranslate" />
+    <meta name="keywords" content="HelloZZZC,"> 
+    <meta name="description" content="stay hungry,stay foolish,为什么要搭建NFS服务在分布式服务中，我们的应用可能是集群部署的拥有ServerA、ServerB甚至ServerC。当用户访问一个图片时，他可能通过Load Balance访问到ServerA，但,"> 
+    <meta name="author" content="HelloZZZC"> 
+    <link rel="alternative" href="atom.xml" title="HelloZZZC&#39;s blog" type="application/atom+xml"> 
+    <link rel="icon" href="/img/favicon.png"> 
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css">
+    <link rel="stylesheet" href="/css/diaspora.css">
+    <!-- <script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+    <script>
+         (adsbygoogle = window.adsbygoogle || []).push({
+              google_ad_client: "ca-pub-8691406134231910",
+              enable_page_level_ads: true
+         });
+    </script> --!>
+    <script async custom-element="amp-auto-ads"
+        src="https://cdn.ampproject.org/v0/amp-auto-ads-0.1.js">
+    </script>
+</head>
+
+<body class="loading">
+    <span id="config-title" style="display:none">HelloZZZC&#39;s blog</span>
+    <div id="loader"></div>
+    <div id="single">
+    <div id="top" style="display: block;">
+    <div class="bar" style="width: 0;"></div>
+    <a class="icon-home image-icon" href="javascript:;" data-url="http://hellozzzc.github.io"></a>
+    <div title="播放/暂停" class="icon-play"></div>
+    <h3 class="subtitle">NFS服务在阿里云服务器上的实践</h3>
+    <div class="social">
+        <!--<div class="like-icon">-->
+            <!--<a href="javascript:;" class="likeThis active"><span class="icon-like"></span><span class="count">76</span></a>-->
+        <!--</div>-->
+        <div>
+            <div class="share">
+                <a title="获取二维码" class="icon-scan" href="javascript:;"></a>
+            </div>
+            <div id="qr"></div>
+        </div>
+    </div>
+    <div class="scrollbar"></div>
+</div>
+
+    <div class="section">
+        <div class="article">
+    <div class='main'>
+        <h1 class="title">NFS服务在阿里云服务器上的实践</h1>
+        <div class="stuff">
+            <span>五月 26, 2020</span>
+            
+  <ul class="post-tags-list"><li class="post-tags-list-item"><a class="post-tags-list-link" href="/tags/运维/">运维</a></li></ul>
+
+
+        </div>
+        <div class="content markdown">
+            <h3 id="为什么要搭建NFS服务"><a href="#为什么要搭建NFS服务" class="headerlink" title="为什么要搭建NFS服务"></a>为什么要搭建NFS服务</h3><p>在分布式服务中，我们的应用可能是集群部署的拥有ServerA、ServerB甚至ServerC。当用户访问一个图片时，他可能通过Load Balance访问到ServerA，但是如果这张图片不在ServerA上而在ServerB上的话不就报错了吗（404 Not Found）？这时你肯定想安静的敲代码不想被产品经理或者你的上司烦恼，这时聪明的程序员就知道该马上想解决方案了。我一开始的想法是保持Server A和Server B的文件保持一个增量同步（我只有2台服务器）然后我就通过<code>Sersync+rsync</code>实现了我的想法（Sersync+rsync的部署可能会开篇文章来说），但是这样一来2边的服务器都保存了图片万一哪天服务挂了我却不知道怎么办，还要对比一下差异保证两边同步想想都头疼，所以最后我又搭了一个NFS服务（Network File System）下面就讲一下部署的流程。当然，肯定也有人会问直接把图片统一存云上就好啦，话是这么说，但是我们有些业务是需要操作本地的图片，比如调用些gd库之类的。</p>
+<h3 id="NFS底层的原理"><a href="#NFS底层的原理" class="headerlink" title="NFS底层的原理"></a>NFS底层的原理</h3><p>这边就稍微带一下好了，主要还是建议去看看<code>鸟哥的linux私房菜</code>里面会比较详细，NFS底层还是通过RPC实现的，NFS守护进程在启动时会到RPC注册对应功能的端口号，RPC通过暴露111端口给客户端，当客户端需要使用服务时会先像RPC进行索要NFS的端口号，拿到端口号之后在跟NFS的守护进程进行交互，比如分析客户端的权限等等。</p>
+<h3 id="NFS服务部署"><a href="#NFS服务部署" class="headerlink" title="NFS服务部署"></a>NFS服务部署</h3><p>下面用2台服务器做演示分别用ServerA和ClientB来表示，当然也可以用Ubantu会稍微有点不同，因为本人就是一开始在Ubantu上部署的，发现有些目录跟centos的略有不同。</p>
+<h4 id="Server-A"><a href="#Server-A" class="headerlink" title="Server A"></a>Server A</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"># 下载依赖，这一步ServerA和ClientB都是一样的</span><br><span class="line">sudo yum install rpcbind</span><br><span class="line">sudo yum install nfs-utils</span><br><span class="line"></span><br><span class="line"># 启动服务</span><br><span class="line">systemctl start rpcbind</span><br><span class="line">systemctl start nfs-server</span><br><span class="line"></span><br><span class="line"># 设置开机自启动</span><br><span class="line">systemctl enable rpcbind </span><br><span class="line">systemctl enable nfs-server</span><br></pre></td></tr></table></figure>
+<p>这时候就可以通过rpcinfo -p来看当前rpc服务注册的端口了，你会发现除了rpc本身（111）的端口，还有NFS本身（2049）的端口，还有好几个其他NFS服务的功能性端口，更优秀的是这几个端口还是随机生成（这阿里云还要配安全组的不是玩完了）。为了解决这个问题nfs也提供了一个方案处理这个问题，那就是到/etc/sysconfig下的nfs文件进行配置，这边我是参考网上大部分的配置<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">RQUOTAD_PORT=30001</span><br><span class="line">LOCKD_TCPPORT=30002</span><br><span class="line">LOCKD_UDPPORT=30002</span><br><span class="line">MOUNTD_PORT=30003</span><br></pre></td></tr></table></figure></p>
+<p>每一行都分别对应TCP和UDP的端口号，这里Ubantu稍微不同，我的Ubantu系统下并没有这个文件需要到另一个文件里配置具体文件名暂时记不起来了（这个等我后续填坑）。修改完后重启nfs，之后在看rpcinfo -p就发现端口号全部固定了，这样以来阿里云安全组就好配多了。<br>以上就是配置，现在我们要暴露我们的路径给我们的客户端，需要到/etc下新建一个exports，按照自己的情况配置具体参数还是看<code>鸟哥的私房菜</code>，改完之后需要重新挂载执行命令<code>exportfs -arv</code>，成功后通过<code>showmount -e</code>就可以看到我们的挂载目录了。</p>
+<h4 id="Client-B"><a href="#Client-B" class="headerlink" title="Client B"></a>Client B</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">安装的步骤同ServerA这里我们讲一下挂载的命令</span><br><span class="line"># 查看ServerA挂载出来的目录</span><br><span class="line">showmount -e your_host</span><br><span class="line"></span><br><span class="line"># 创建挂载的本地目录</span><br><span class="line">mkdir dir</span><br><span class="line"></span><br><span class="line"># 挂载目录</span><br><span class="line">mount -t nfs your_host:/dir dir</span><br></pre></td></tr></table></figure>
+<p>补充一下日志在/var/log/message中查看，根据不同日志信息分析具体的失败原因。</p>
+<h3 id="结语"><a href="#结语" class="headerlink" title="结语"></a>结语</h3><p>以上是NFS部署的相关步骤，如果有些不足作者会在后续补上，也欢迎大家提出错误的地方和不足。作者邮箱:<a href="mailto:zc19940702@gmail.com" target="_blank" rel="noopener">zc19940702@gmail.com</a></p>
+
+            <!--[if lt IE 9]><script>document.createElement('audio');</script><![endif]-->
+            <audio id="audio" loop="1" preload="auto" controls="controls" data-autoplay="false">
+                <source type="audio/mpeg" src="">
+            </audio>
+            
+                <ul id="audio-list" style="display:none">
+                    
+                        <li title='0' data-url='http://link.hhtjim.com/163/5146554.mp3'></li>
+                    
+                        <li title='1' data-url='http://link.hhtjim.com/qq/001faIUs4M2zna.mp3'></li>
+                    
+                </ul>
+            
+        </div>
+        
+    <div id='gitalk-container' class="comment link"
+        data-ae='false'
+        data-ci='633f96db28a52e4e6b22'
+        data-cs='2d368db93f1ac4831334636960a8a8da75c542b8'
+        data-r='HelloZZZC.github.io'
+        data-o='HelloZZZC'
+        data-a='HelloZZZC'
+        data-d='false'
+    >查看评论</div>
+
+
+    </div>
+    
+</div>
+
+
+    </div>
+</div>
+</body>
+<script src="https://unpkg.com/gitalk@latest/dist/gitalk.min.js"></script>
+<script src="//lib.baomitu.com/jquery/1.8.3/jquery.min.js"></script>
+<script src="/js/plugin.js"></script>
+<script src="/js/diaspora.js"></script>
+<link rel="stylesheet" href="/photoswipe/photoswipe.css">
+<link rel="stylesheet" href="/photoswipe/default-skin/default-skin.css">
+<script src="/photoswipe/photoswipe.min.js"></script>
+<script src="/photoswipe/photoswipe-ui-default.min.js"></script>
+
+<!-- Root element of PhotoSwipe. Must have class pswp. -->
+<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+    <!-- Background of PhotoSwipe. 
+         It's a separate element as animating opacity is faster than rgba(). -->
+    <div class="pswp__bg"></div>
+    <!-- Slides wrapper with overflow:hidden. -->
+    <div class="pswp__scroll-wrap">
+        <!-- Container that holds slides. 
+            PhotoSwipe keeps only 3 of them in the DOM to save memory.
+            Don't modify these 3 pswp__item elements, data is added later on. -->
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+        <!-- Default (PhotoSwipeUI_Default) interface on top of sliding area. Can be changed. -->
+        <div class="pswp__ui pswp__ui--hidden">
+            <div class="pswp__top-bar">
+                <!--  Controls are self-explanatory. Order can be changed. -->
+                <div class="pswp__counter"></div>
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+                <!-- Preloader demo http://codepen.io/dimsemenov/pen/yyBWoR -->
+                <!-- element will get class pswp__preloader--active when preloader is running -->
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                      <div class="pswp__preloader__cut">
+                        <div class="pswp__preloader__donut"></div>
+                      </div>
+                    </div>
+                </div>
+            </div>
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div> 
+            </div>
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
+            </button>
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
+            </button>
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+</html>
