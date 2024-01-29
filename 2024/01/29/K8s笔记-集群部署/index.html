@@ -1,0 +1,676 @@
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="晨晨晨晨晨晨🐼&#39;s blog">
+    <title>K8s笔记--集群部署 - 晨晨晨晨晨晨🐼&#39;s blog</title>
+    <meta name="author" content="晨晨晨晨晨晨🐼">
+    
+        <meta name="keywords" content="Java,PHP,DevOps,">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg"},"articleBody":"前言在了解了K8s的基础架构之后我们就可以尝试去部署K8s集群，目前K8s集群部署的方式有3种：\n\n\n\n方式名称\n区别\n\n\n\n\nMiniKube\n仅支持单节点部署集群，相当于是初学者学习K8s集群的工具\n\n\nKubeadm\n通过Kubeadm init初始化集群以及通过kubeadm join 加入Node节点，以此来实现集群部署。部署比较方便，执行init会自动初始化Master节点需要的服务\n\n\n二进制包\n从官网下载各个服务的二进制包单独部署\n\n\n\n该篇文章将展示如何通过Kubeadm部署集群并且实现公网部署。（由于仅俩台服务器且处在不同的内网下导致只能通过公网部署，正常企业阿里云同一账户下的俩台ECS处在同一内网）\nKubeadm 集群部署\n安装Docker(Master、Node)安装Docker可参考官方文档，注意这里Docker有个配置需要调整，我们需要调整Docker的Cgroup为systemd（目的是跟K8s保持一致），Docker默认的是groupfs。不确定的同学可以执行docker info | grep cgroup看一下。更改方式如下：执行vim /etc/docker/daemon.json123456&#123;   &quot;registry-mirrors&quot;: [   &quot;https://mirror.ccs.tencentyun.com&quot;  ],   &quot;exec-opts&quot;: [&quot;native.cgroupdriver=systemd&quot;] // 新增该行&#125;\n\n\n\n\n安装Kubeadm、kubeadm、kubectl(Master、Node)\n123456789// 添加k8s的源curl https://mirrors.aliyun.com/kubernetes/apt/doc/apt-key.gpg | apt-key add -    cat &lt;&lt;EOF &gt;/etc/apt/sources.list.d/kubernetes.listdeb https://mirrors.aliyun.com/kubernetes/apt/ kubernetes-xenial mainEOF// 执行命令apt-get updateapt-get install -y kubelet kubeadm kubectl\n\n更新containerd种sandbox的源为国内镜像(Master、Node)执行containerd config default &gt; /etc/containerd/config.toml，执行/etc/containerd/config.toml编辑配置文件中的sandbox_image配置改为registry.aliyuncs.com/google_containers/pause:3.6。之后执行service containerd restart重启服务。\n123...sandbox_image = &quot;registry.aliyuncs.com/google_containers/pause:3.6&quot; // 替换成国内阿里云的源...\n\n初始化Master节点(Master)\n1kubeadm init --apiserver-advertise-address=&lt;IP&gt; --image-repository registry.aliyuncs.com/google_containers --kubernetes-version latest --service-cidr=10.96.0.0/12  --pod-network-cidr=10.244.0.0/16\n\n\n执行成功后根据提示执行123456// 根据init后续执行mkdir -p $HOME/.kubesudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/configsudo chown $(id -u):$(id -g) $HOME/.kube/configexport KUBECONFIG=/etc/kubernetes/admin.conf\n\n安装网络插件Flannel为了保证集群拥有一个正常工作的POD网络，我们需要为集群安装网络插件。网络插件有很多，这里采用的是Flannel。\n123wget https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml// 执行清单kubectl -f kube-flannel.yml\n\nNode加入集群\n1kubeadm join &lt;IP&gt;:6443 --token &lt;token&gt; --discovery-token-ca-cert-hash &lt;hash&gt;\n\n\n注意这里的token是有有效期的，若token过期执行以下命令行：1kubeadm token create --print-join-command\n公网部署配置调整以上操作作用于内网集群部署，由于目前俩台服务器一台为本人自己的腾讯云服务器、一台为朋友的腾讯云服务器因此是不能搭建常用的内网集群（常规企业内部基本上都是内网搭建集群，原因也很简单不需要考虑带宽、流量）。为了实现K8s的集群搭建学习还是需要调整一下配置让K8s支持公网部署。因此以下操作仅用作记录。\n\n创建虚拟网卡(Master、Node)\n12// 创建虚拟网卡绑定公网ipsudo ifconfig eth0:1 &lt;公网IP&gt;\n\n调整kubelet的启动参数(Master、Node)执行vi /etc/systemd/system/kubelet.service.d/10-kubeadm.conf新增–node-ip参数\n123...// 新增--node-ip参数ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS --node-ip=&lt;公网IP&gt;\n\n修改api-server参数(Master)执行vi /etc/kubernetes/manifests/kube-apiserver.yaml编辑指定参数\n123...- --advertise-address: &lt;公网IP&gt;- --bind-address: 0.0.0.0\n\n调整网络插件Flannel配置参数(Master)执行vim kube-flannel.yml编辑指定参数\n123456789101112...args: - --ip-masq - --public-ip=$(PUBLIC_IP) - --iface=eth0 - --kube-sub-net-mgr...env: - name: PUBLIC_IP   valueFrom:     fieldRef:       fieldPath: status.podIP\n\n确保iptables能够监控容器的网络通信(Master、Node)\n123456789cat &lt;&lt;EOF | sudo tee /etc/modules-load.d/k8s.confbr_netfilterEOFcat &lt;&lt;EOF | sudo tee /etc/sysctl.d/k8s.confnet.bridge.bridge-nf-call-ip6tables = 1net.bridge.bridge-nf-call-iptables = 1EOFsudo sysctl --system\n\n调整kubeadm初始化参数(Master)执行kubeadm init --apiserver-advertise-address=&lt;公网IP&gt; --control-plane-endpoint=&lt;公网IP&gt; --image-repository registry.aliyuncs.com/google_containers --kubernetes-version latest --service-cidr=10.96.0.0/12  --pod-network-cidr=10.244.0.0/16\n\n\n排查问题命令\njournalctl -f -u kubelet（查看POD运行的日志，比如POD状态为Not-Ready）\nkubectl logs  -n \n\n常见问题以及解决办法\n初始化Err：crictl not found in system path\n12wget https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.29.0/crictl-v1.29.0-darwin-amd64.tar.gztar zxvf crictl-v1.29.0-linux-amd64.tar.gz -C /usr/local/bin\n\n初始化Err: conntrack not found in system path\n1apt-get install -y conntrack\n\n镜像源问题导致镜像拉不下来修改配置文件，将镜像源改为国内镜像地址\n\n“cni0” already has an IP address different from 10.244.2.1/24”12345678910111213# 执行ifconfig发现cni0的网卡绑定的ip为如下所示：cni0: flags=4099&lt;UP,BROADCAST,MULTICAST&gt;  mtu 1500        inet 10.244.1.1  netmask 255.255.255.0  broadcast 10.244.1.255        inet6 fe80::4820:22ff:fedb:f685  prefixlen 64  scopeid 0x20&lt;link&gt;        ether 4a:20:22:db:f6:85  txqueuelen 1000  (Ethernet)        RX packets 80  bytes 5520 (5.3 KiB)        RX errors 0  dropped 0  overruns 0  frame 0        TX packets 5  bytes 446 (446.0 B)        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0# 发现网卡绑定的ip是10.244.1.1，同10.244.2.1/24并不在同一个网段，解决的办法执行如下命令即可：ifconfig cni0 downip link delete cni0\n\n\nK8s有着非常不错的社区，因此基本问题都能通过google找到答案，只要我们了解排查问题的命令即可。\n集群部署后验证这里是准备了一个简单的资源清单分别是:my-nginx-deploy.yml1234567891011121314151617181920apiVersion: apps/v1kind: Deploymentmetadata:  name: my-nginx-test  namespace:spec:  selector:    matchLabels:      app: nginx  replicas: 1  template:    metadata:      labels:        app: nginx    spec:      containers:      - name: my-nginx        image: nginx        ports:        - containerPort: 80\nmy-nginx-service.yml1234567891011apiVersion: v1kind: Servicemetadata:  name: my-nginx-test-servicespec:  type: NodePort  selector:    app: nginx  ports:    - port: 80      targetPort: 80\n分别执行后若能通过Service对外暴露的端口&lt;Node IP&gt;:&lt;Service Port&gt;正常展示nginx页面说明集群部署成功。\n","dateCreated":"2024-01-29T15:35:39+08:00","dateModified":"2024-01-29T17:58:08+08:00","datePublished":"2024-01-29T15:35:39+08:00","description":"前言在了解了K8s的基础架构之后我们就可以尝试去部署K8s集群，目前K8s集群部署的方式有3种：\n\n\n\n方式名称\n区别\n\n\n\n\nMiniKube\n仅支持单节点部署集群，相当于是初学者学习K8s集群的工具\n\n\nKubeadm\n通过Kubeadm init初始化集群以及通过kubeadm join 加入Node节点，以此来实现集群部署。部署比较方便，执行init会自动初始化Master节点需要的服务\n\n\n二进制包\n从官网下载各个服务的二进制包单独部署\n\n\n\n该篇文章将展示如何通过Kubeadm部署集群并且实现公网部署。（由于仅俩台服务器且处在不同的内网下导致只能通过公网部署，正常企业阿里云同一账户下的俩台ECS处在同一内网）\nKubeadm 集群部署\n安装Docker(Master、Node)安装Docker可参考官方文档，注意这里Docker有个配置需要调整，我们需要调整Docker的Cgroup为systemd（目的是跟K8s保持一致），Docker默认的是groupfs。不确定的同学可以执行docker info | grep cgroup看一下。更改方式如下：执行vim /etc/docker/daemon.json123456&#123;   &quot;registry-mirrors&quot;: [   &quot;https://mirror.ccs.tencentyun.com&quot;  ],   &quot;exec-opts&quot;: [&quot;native.cgroupdriver=systemd&quot;] // 新增该行&#125;\n\n","headline":"K8s笔记--集群部署","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2024/01/29/K8s笔记-集群部署/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg","logo":{"@type":"ImageObject","url":"avatar.jpg"}},"url":"http://hellozzzc.github.io/2024/01/29/K8s笔记-集群部署/","keywords":"K8s"}</script>
+    <meta name="description" content="前言在了解了K8s的基础架构之后我们就可以尝试去部署K8s集群，目前K8s集群部署的方式有3种：    方式名称 区别     MiniKube 仅支持单节点部署集群，相当于是初学者学习K8s集群的工具   Kubeadm 通过Kubeadm init初始化集群以及通过kubeadm join 加入Node节点，以此来实现集群部署。部署比较方便，执行init会自动初始化Master节点需要的服务">
+<meta name="keywords" content="K8s">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="K8s笔记--集群部署">
+<meta property="og:url" content="http://hellozzzc.github.io/2024/01/29/K8s笔记-集群部署/index.html">
+<meta property="og:site_name" content="晨晨晨晨晨晨🐼&#39;s blog">
+<meta property="og:description" content="前言在了解了K8s的基础架构之后我们就可以尝试去部署K8s集群，目前K8s集群部署的方式有3种：    方式名称 区别     MiniKube 仅支持单节点部署集群，相当于是初学者学习K8s集群的工具   Kubeadm 通过Kubeadm init初始化集群以及通过kubeadm join 加入Node节点，以此来实现集群部署。部署比较方便，执行init会自动初始化Master节点需要的服务">
+<meta property="og:locale" content="zh-cn">
+<meta property="og:updated_time" content="2024-01-29T09:58:08.487Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="K8s笔记--集群部署">
+<meta name="twitter:description" content="前言在了解了K8s的基础架构之后我们就可以尝试去部署K8s集群，目前K8s集群部署的方式有3种：    方式名称 区别     MiniKube 仅支持单节点部署集群，相当于是初学者学习K8s集群的工具   Kubeadm 通过Kubeadm init初始化集群以及通过kubeadm join 加入Node节点，以此来实现集群部署。部署比较方便，执行init会自动初始化Master节点需要的服务">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="http://hellozzzc.github.io/assets/images/avatar.jpg"/>
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/style-p7w8wxcc22z0uoeozhcztvvpgv2umorvyzcejj03qywn9okzjboqr0e7flor.min.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            晨晨晨晨晨晨🐼&#39;s blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">晨晨晨晨晨晨🐼</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="搜索"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">搜索</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/HelloZZZC"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            K8s笔记--集群部署
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2024-01-29T15:35:39+08:00">
+	
+		    2024 年 1 月 29 日
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/运维/">运维</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <h3 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h3><p>在了解了K8s的基础架构之后我们就可以尝试去部署K8s集群，目前K8s集群部署的方式有3种：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">方式名称</th>
+<th style="text-align:left">区别</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">MiniKube</td>
+<td style="text-align:left">仅支持单节点部署集群，相当于是初学者学习K8s集群的工具</td>
+</tr>
+<tr>
+<td style="text-align:left">Kubeadm</td>
+<td style="text-align:left">通过Kubeadm init初始化集群以及通过kubeadm join 加入Node节点，以此来实现集群部署。部署比较方便，执行init会自动初始化Master节点需要的服务</td>
+</tr>
+<tr>
+<td style="text-align:left">二进制包</td>
+<td style="text-align:left">从官网下载各个服务的二进制包单独部署</td>
+</tr>
+</tbody>
+</table>
+<p>该篇文章将展示如何通过Kubeadm部署集群并且实现公网部署。（由于仅俩台服务器且处在不同的内网下导致只能通过公网部署，正常企业阿里云同一账户下的俩台ECS处在同一内网）</p>
+<h3 id="Kubeadm-集群部署"><a href="#Kubeadm-集群部署" class="headerlink" title="Kubeadm 集群部署"></a>Kubeadm 集群部署</h3><ol>
+<li>安装Docker(Master、Node)<br>安装Docker可参考官方文档，注意这里Docker有个配置需要调整，我们需要调整Docker的Cgroup为systemd（目的是跟K8s保持一致），Docker默认的是groupfs。不确定的同学可以执行<code>docker info | grep cgroup</code>看一下。更改方式如下：<br>执行<code>vim /etc/docker/daemon.json</code><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">&#123;</span><br><span class="line">   &quot;registry-mirrors&quot;: [</span><br><span class="line">   &quot;https://mirror.ccs.tencentyun.com&quot;</span><br><span class="line">  ],</span><br><span class="line">   &quot;exec-opts&quot;: [&quot;native.cgroupdriver=systemd&quot;] // 新增该行</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+<a id="more"></a>
+<ol start="2">
+<li><p>安装Kubeadm、kubeadm、kubectl(Master、Node)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">// 添加k8s的源</span><br><span class="line">curl https://mirrors.aliyun.com/kubernetes/apt/doc/apt-key.gpg | apt-key add -</span><br><span class="line">    cat &lt;&lt;EOF &gt;/etc/apt/sources.list.d/kubernetes.list</span><br><span class="line">deb https://mirrors.aliyun.com/kubernetes/apt/ kubernetes-xenial main</span><br><span class="line">EOF</span><br><span class="line"></span><br><span class="line">// 执行命令</span><br><span class="line">apt-get update</span><br><span class="line">apt-get install -y kubelet kubeadm kubectl</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>更新containerd种sandbox的源为国内镜像(Master、Node)<br>执行<code>containerd config default &gt; /etc/containerd/config.toml</code>，执行<code>/etc/containerd/config.toml</code>编辑配置文件中的sandbox_image配置改为<code>registry.aliyuncs.com/google_containers/pause:3.6</code>。之后执行<code>service containerd restart</code>重启服务。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">...</span><br><span class="line">sandbox_image = &quot;registry.aliyuncs.com/google_containers/pause:3.6&quot; // 替换成国内阿里云的源</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>初始化Master节点(Master)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubeadm init --apiserver-advertise-address=&lt;IP&gt; --image-repository registry.aliyuncs.com/google_containers --kubernetes-version latest --service-cidr=10.96.0.0/12  --pod-network-cidr=10.244.0.0/16</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+<p>执行成功后根据提示执行<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">// 根据init后续执行</span><br><span class="line">mkdir -p $HOME/.kube</span><br><span class="line">sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config</span><br><span class="line">sudo chown $(id -u):$(id -g) $HOME/.kube/config</span><br><span class="line"></span><br><span class="line">export KUBECONFIG=/etc/kubernetes/admin.conf</span><br></pre></td></tr></table></figure></p>
+<ol start="5">
+<li><p>安装网络插件Flannel<br>为了保证集群拥有一个正常工作的POD网络，我们需要为集群安装网络插件。网络插件有很多，这里采用的是Flannel。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">wget https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml</span><br><span class="line">// 执行清单</span><br><span class="line">kubectl -f kube-flannel.yml</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>Node加入集群</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubeadm join &lt;IP&gt;:6443 --token &lt;token&gt; --discovery-token-ca-cert-hash &lt;hash&gt;</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+<p>注意这里的token是有有效期的，若token过期执行以下命令行：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kubeadm token create --print-join-command</span><br></pre></td></tr></table></figure></p>
+<h3 id="公网部署配置调整"><a href="#公网部署配置调整" class="headerlink" title="公网部署配置调整"></a>公网部署配置调整</h3><p>以上操作作用于内网集群部署，由于目前俩台服务器一台为本人自己的腾讯云服务器、一台为朋友的腾讯云服务器因此是不能搭建常用的内网集群（常规企业内部基本上都是内网搭建集群，原因也很简单不需要考虑带宽、流量）。为了实现K8s的集群搭建学习还是需要调整一下配置让K8s支持公网部署。因此以下操作仅用作记录。</p>
+<ol>
+<li><p>创建虚拟网卡(Master、Node)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">// 创建虚拟网卡绑定公网ip</span><br><span class="line">sudo ifconfig eth0:1 &lt;公网IP&gt;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>调整kubelet的启动参数(Master、Node)<br>执行<code>vi /etc/systemd/system/kubelet.service.d/10-kubeadm.conf</code>新增–node-ip参数</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">...</span><br><span class="line">// 新增--node-ip参数</span><br><span class="line">ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS --node-ip=&lt;公网IP&gt;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>修改api-server参数(Master)<br>执行<code>vi /etc/kubernetes/manifests/kube-apiserver.yaml</code>编辑指定参数</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">...</span><br><span class="line">- --advertise-address: &lt;公网IP&gt;</span><br><span class="line">- --bind-address: 0.0.0.0</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>调整网络插件Flannel配置参数(Master)<br>执行<code>vim kube-flannel.yml</code>编辑指定参数</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">...</span><br><span class="line">args:</span><br><span class="line"> - --ip-masq</span><br><span class="line"> - --public-ip=$(PUBLIC_IP)</span><br><span class="line"> - --iface=eth0</span><br><span class="line"> - --kube-sub-net-mgr</span><br><span class="line">...</span><br><span class="line">env:</span><br><span class="line"> - name: PUBLIC_IP</span><br><span class="line">   valueFrom:</span><br><span class="line">     fieldRef:</span><br><span class="line">       fieldPath: status.podIP</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>确保iptables能够监控容器的网络通信(Master、Node)</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">cat &lt;&lt;EOF | sudo tee /etc/modules-load.d/k8s.conf</span><br><span class="line">br_netfilter</span><br><span class="line">EOF</span><br><span class="line"></span><br><span class="line">cat &lt;&lt;EOF | sudo tee /etc/sysctl.d/k8s.conf</span><br><span class="line">net.bridge.bridge-nf-call-ip6tables = 1</span><br><span class="line">net.bridge.bridge-nf-call-iptables = 1</span><br><span class="line">EOF</span><br><span class="line">sudo sysctl --system</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>调整kubeadm初始化参数(Master)<br>执行<code>kubeadm init --apiserver-advertise-address=&lt;公网IP&gt; --control-plane-endpoint=&lt;公网IP&gt; --image-repository registry.aliyuncs.com/google_containers --kubernetes-version latest --service-cidr=10.96.0.0/12  --pod-network-cidr=10.244.0.0/16</code></p>
+</li>
+</ol>
+<h3 id="排查问题命令"><a href="#排查问题命令" class="headerlink" title="排查问题命令"></a>排查问题命令</h3><ol>
+<li>journalctl -f -u kubelet（查看POD运行的日志，比如POD状态为Not-Ready）</li>
+<li>kubectl logs <pod> -n <namespace></namespace></pod></li>
+</ol>
+<h3 id="常见问题以及解决办法"><a href="#常见问题以及解决办法" class="headerlink" title="常见问题以及解决办法"></a>常见问题以及解决办法</h3><ol>
+<li><p>初始化Err：crictl not found in system path</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">wget https://github.com/kubernetes-sigs/cri-tools/releases/download/v1.29.0/crictl-v1.29.0-darwin-amd64.tar.gz</span><br><span class="line">tar zxvf crictl-v1.29.0-linux-amd64.tar.gz -C /usr/local/bin</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>初始化Err: conntrack not found in system path</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">apt-get install -y conntrack</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>镜像源问题导致镜像拉不下来<br>修改配置文件，将镜像源改为国内镜像地址</p>
+</li>
+<li>“cni0” already has an IP address different from 10.244.2.1/24”<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"># 执行ifconfig发现cni0的网卡绑定的ip为如下所示：</span><br><span class="line">cni0: flags=4099&lt;UP,BROADCAST,MULTICAST&gt;  mtu 1500</span><br><span class="line">        inet 10.244.1.1  netmask 255.255.255.0  broadcast 10.244.1.255</span><br><span class="line">        inet6 fe80::4820:22ff:fedb:f685  prefixlen 64  scopeid 0x20&lt;link&gt;</span><br><span class="line">        ether 4a:20:22:db:f6:85  txqueuelen 1000  (Ethernet)</span><br><span class="line">        RX packets 80  bytes 5520 (5.3 KiB)</span><br><span class="line">        RX errors 0  dropped 0  overruns 0  frame 0</span><br><span class="line">        TX packets 5  bytes 446 (446.0 B)</span><br><span class="line">        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0</span><br><span class="line"></span><br><span class="line"># 发现网卡绑定的ip是10.244.1.1，同10.244.2.1/24并不在同一个网段，解决的办法执行如下命令即可：</span><br><span class="line">ifconfig cni0 down</span><br><span class="line">ip link delete cni0</span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+<p>K8s有着非常不错的社区，因此基本问题都能通过google找到答案，只要我们了解排查问题的命令即可。</p>
+<h3 id="集群部署后验证"><a href="#集群部署后验证" class="headerlink" title="集群部署后验证"></a>集群部署后验证</h3><p>这里是准备了一个简单的资源清单分别是:<br>my-nginx-deploy.yml<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">apiVersion: apps/v1</span><br><span class="line">kind: Deployment</span><br><span class="line">metadata:</span><br><span class="line">  name: my-nginx-test</span><br><span class="line">  namespace:</span><br><span class="line">spec:</span><br><span class="line">  selector:</span><br><span class="line">    matchLabels:</span><br><span class="line">      app: nginx</span><br><span class="line">  replicas: 1</span><br><span class="line">  template:</span><br><span class="line">    metadata:</span><br><span class="line">      labels:</span><br><span class="line">        app: nginx</span><br><span class="line">    spec:</span><br><span class="line">      containers:</span><br><span class="line">      - name: my-nginx</span><br><span class="line">        image: nginx</span><br><span class="line">        ports:</span><br><span class="line">        - containerPort: 80</span><br></pre></td></tr></table></figure></p>
+<p>my-nginx-service.yml<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">apiVersion: v1</span><br><span class="line">kind: Service</span><br><span class="line">metadata:</span><br><span class="line">  name: my-nginx-test-service</span><br><span class="line">spec:</span><br><span class="line">  type: NodePort</span><br><span class="line">  selector:</span><br><span class="line">    app: nginx</span><br><span class="line">  ports:</span><br><span class="line">    - port: 80</span><br><span class="line">      targetPort: 80</span><br></pre></td></tr></table></figure></p>
+<p>分别执行后若能通过Service对外暴露的端口<code>&lt;Node IP&gt;:&lt;Service Port&gt;</code>正常展示nginx页面说明集群部署成功。</p>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/K8s/">K8s</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/01/27/K8s笔记-基础架构/"
+                    data-tooltip="K8s笔记--基础架构"
+                    aria-label="下一篇: K8s笔记--基础架构"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/01/29/K8s笔记-集群部署/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/01/29/K8s笔记-集群部署/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/01/29/K8s笔记-集群部署/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2024 晨晨晨晨晨晨🐼. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/01/27/K8s笔记-基础架构/"
+                    data-tooltip="K8s笔记--基础架构"
+                    aria-label="下一篇: K8s笔记--基础架构"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/01/29/K8s笔记-集群部署/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/01/29/K8s笔记-集群部署/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/01/29/K8s笔记-集群部署/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/01/29/K8s笔记-集群部署/"
+                        aria-label="分享到 Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>分享到 Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/01/29/K8s笔记-集群部署/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/01/29/K8s笔记-集群部署/"
+                        aria-label="分享到 Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>分享到 Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">晨晨晨晨晨晨🐼</h4>
+        
+            <div id="about-card-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Java开发者、PHP开发者、DevOps爱好者</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                HangZhou，China
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('/assets/images/cover2.jpg');"></div>
+        <!--SCRIPTS-->
+<script src="/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>
