@@ -1,70 +1,266 @@
 
 <!DOCTYPE html>
-<html lang="" class="loading">
+<html lang="zh-cn">
+    
 <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-    <meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>知识梳理Mysql篇（一） - HelloZZZC&#39;s blog</title>
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="google" content="notranslate" />
-    <meta name="keywords" content="HelloZZZC,"> 
-    <meta name="description" content="stay hungry,stay foolish,Mysql数据库结构体系如图所示
-分析器对sql语句做词法分析以及语法分析，比如是select、update或者是insert，然后在到具体操作的表和字段，判断表是否存在、字段是否存在、语法是否正确,"> 
-    <meta name="author" content="HelloZZZC"> 
-    <link rel="alternative" href="atom.xml" title="HelloZZZC&#39;s blog" type="application/atom+xml"> 
-    <link rel="icon" href="/img/favicon.png"> 
-    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css">
-    <link rel="stylesheet" href="/css/diaspora.css">
-    <!-- <script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
-    <script>
-         (adsbygoogle = window.adsbygoogle || []).push({
-              google_ad_client: "ca-pub-8691406134231910",
-              enable_page_level_ads: true
-         });
-    </script> --!>
-    <script async custom-element="amp-auto-ads"
-        src="https://cdn.ampproject.org/v0/amp-auto-ads-0.1.js">
-    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="晨晨晨晨晨晨🐼&#39;s blog">
+    <title>知识梳理Mysql篇（一） - 晨晨晨晨晨晨🐼&#39;s blog</title>
+    <meta name="author" content="晨晨晨晨晨晨🐼">
+    
+        <meta name="keywords" content="Java,PHP,DevOps,">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg"},"articleBody":"Mysql数据库结构体系如图所示\n分析器对sql语句做词法分析以及语法分析，比如是select、update或者是insert，然后在到具体操作的表和字段，判断表是否存在、字段是否存在、语法是否正确。\n优化器对sql语句做优化，决定是使用哪个所以，决定join的顺序\n执行器执行sql语句时判断对当前表是否有操作的权限，如果没有就会返回权限错误，如果有就打开表进行执行。\n存储引擎mysql的存储引擎有很多，但是比较常见的有Innodb、Myisam、Memory，但是除此之外还有NDB、Archive、Maria、Federated\nInnodb主要面向OLTP（在线事务处理）的应用，通过多版本并发控制（MVVC）实现高并发性，支持事务（默认的事务隔离级别为repeatTable）、行锁。通过next-key-locking的策略避免幻读的产生。通过二次写、插入缓冲、自适应哈希索引、预读提高性能和可用性。\nMyisamMyisam由MYD和MYI组成，不支持事务、不支持行锁、支持表锁、支持全文索引主要面向OLAP（在线分析处理）的应用。Myisam只缓存索引文件，不缓存数据文件。\nMemory将表中的数据存放在内存中，如果服务器宕机或者重启数据将会丢失，不适合做数据的持久化存储，更适合用作临时数据存储，默认使用哈希索引，支持B树索引。虽然存储引擎很快，但是使用中依然存在限制。\n\n只支持表锁，并发性差\n不支持TEXT和BLOB的数据类型\n存储变长字段时是按照定长字段的方式存储所以会有空间浪费的问题\n\nNDB集群索引引擎，数据全部存放在内存中，因此通过主键查找的速度很快并且能通过增加集群中的节点提升性能，但是NDB在Join的操作上是在mysql数据层面上处理，所以越复杂的连接操作会有比较大的网络开销\nArchiveArchive只支持select和insert，mysql版本在5.1之后支持索引，使用场景上一般为存储归档的数据，因为其会将行数据通过zlib算法进行压缩，因此数据占用的空间会比较少，但该引擎非事务安全的存储引擎，仅提供快速插入和压缩的功能\nMaria是为了取代Myisam而开发的存储引擎，支持缓存数据和索引文件，支持行锁，支持MVVC，支持事务和非安全事务的选择，以及更好的BLOB字符类型的处理性能\n对比表格各存储引擎对比如下，如果有问题请指出。\n\n\n\n功能\nMyisam\nMemory\nInnoDB\nArchive\nNDB\n\n\n\n\n支持事务\nN\nN\nY\nN\nN\n\n\n锁类型\n表锁\n表锁\n行锁\n行锁\n行锁\n\n\nMVVC\nN\nN\nY\nY\nY\n\n\nB树索引\nY\nY\nY\nN\nY\n\n\nHash索引\nN\nY\nY\nN\nY\n\n\n全文索引\nY\nN\nN\nN\nN\n\n\n聚簇索引\nN\nN\nY\nN\nN\n\n\n数据缓存\nN\nY\nY\nN\nY\n\n\n索引缓存\nY\nY\nY\nN\nY\n\n\n数据压缩\nY\nN\nN\nY\nN\n\n\n存储成本（应该是硬盘空间）\n低\nN/A\n高\n非常低\n低\n\n\n内存成本\n低\n中等\n高\n低\n高\n\n\n批量插入速度\n高\n高\n慢\n非常高\n高\n\n\n\n","dateCreated":"2020-06-14T10:36:40+08:00","dateModified":"2024-01-29T11:22:00+08:00","datePublished":"2020-06-14T10:36:40+08:00","description":"Mysql数据库结构体系如图所示","headline":"知识梳理Mysql篇（一）","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg","logo":{"@type":"ImageObject","url":"avatar.jpg"}},"url":"http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/","keywords":"Mysql"}</script>
+    <meta name="description" content="Mysql数据库结构体系如图所示">
+<meta name="keywords" content="Mysql">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="知识梳理Mysql篇（一）">
+<meta property="og:url" content="http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/index.html">
+<meta property="og:site_name" content="晨晨晨晨晨晨🐼&#39;s blog">
+<meta property="og:description" content="Mysql数据库结构体系如图所示">
+<meta property="og:locale" content="zh-cn">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/mysql_structure.png">
+<meta property="og:updated_time" content="2024-01-29T03:22:00.959Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="知识梳理Mysql篇（一）">
+<meta name="twitter:description" content="Mysql数据库结构体系如图所示">
+<meta name="twitter:image" content="http://hellozzzc.github.io/assets/images/posts/mysql_structure.png">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="http://hellozzzc.github.io/assets/images/avatar.jpg"/>
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/style-p7w8wxcc22z0uoeozhcztvvpgv2umorvyzcejj03qywn9okzjboqr0e7flor.min.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
 </head>
 
-<body class="loading">
-    <span id="config-title" style="display:none">HelloZZZC&#39;s blog</span>
-    <div id="loader"></div>
-    <div id="single">
-    <div id="top" style="display: block;">
-    <div class="bar" style="width: 0;"></div>
-    <a class="icon-home image-icon" href="javascript:;" data-url="http://hellozzzc.github.io"></a>
-    <div title="播放/暂停" class="icon-play"></div>
-    <h3 class="subtitle">知识梳理Mysql篇（一）</h3>
-    <div class="social">
-        <!--<div class="like-icon">-->
-            <!--<a href="javascript:;" class="likeThis active"><span class="icon-like"></span><span class="count">76</span></a>-->
-        <!--</div>-->
-        <div>
-            <div class="share">
-                <a title="获取二维码" class="icon-scan" href="javascript:;"></a>
-            </div>
-            <div id="qr"></div>
-        </div>
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            晨晨晨晨晨晨🐼&#39;s blog
+        </a>
     </div>
-    <div class="scrollbar"></div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">晨晨晨晨晨晨🐼</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="搜索"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">搜索</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/HelloZZZC"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            知识梳理Mysql篇（一）
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2020-06-14T10:36:40+08:00">
+	
+		    2020 年 6 月 14 日
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/后端技术/">后端技术</a>
+
+
+    
 </div>
 
-    <div class="section">
-        <div class="article">
-    <div class='main'>
-        <h1 class="title">知识梳理Mysql篇（一）</h1>
-        <div class="stuff">
-            <span>六月 14, 2020</span>
-            
-  <ul class="post-tags-list"><li class="post-tags-list-item"><a class="post-tags-list-link" href="/tags/Mysql/">Mysql</a></li></ul>
+    
+</div>
 
-
-        </div>
-        <div class="content markdown">
-            <h3 id="Mysql数据库结构体系"><a href="#Mysql数据库结构体系" class="headerlink" title="Mysql数据库结构体系"></a>Mysql数据库结构体系</h3><p>如图所示<br><img src="http://47.98.171.193/mysql-server-struct.png" alt="mysql-server-struct"></p>
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <h3 id="Mysql数据库结构体系"><a href="#Mysql数据库结构体系" class="headerlink" title="Mysql数据库结构体系"></a>Mysql数据库结构体系</h3><p>如图所示<br><img src="/assets/images/posts/mysql_structure.png" alt="mysql-server-struct"><br><a id="more"></a></p>
 <h4 id="分析器"><a href="#分析器" class="headerlink" title="分析器"></a>分析器</h4><p>对sql语句做词法分析以及语法分析，比如是select、update或者是insert，然后在到具体操作的表和字段，判断表是否存在、字段是否存在、语法是否正确。</p>
 <h4 id="优化器"><a href="#优化器" class="headerlink" title="优化器"></a>优化器</h4><p>对sql语句做优化，决定是使用哪个所以，决定join的顺序</p>
 <h4 id="执行器"><a href="#执行器" class="headerlink" title="执行器"></a>执行器</h4><p>执行sql语句时判断对当前表是否有操作的权限，如果没有就会返回权限错误，如果有就打开表进行执行。</p>
@@ -200,96 +396,334 @@
 </tbody>
 </table>
 
-            <!--[if lt IE 9]><script>document.createElement('audio');</script><![endif]-->
-            <audio id="audio" loop="1" preload="auto" controls="controls" data-autoplay="false">
-                <source type="audio/mpeg" src="">
-            </audio>
             
-                <ul id="audio-list" style="display:none">
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/Mysql/">Mysql</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
                     
-                        <li title='0' data-url='http://link.hhtjim.com/163/5146554.mp3'></li>
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/01/27/K8s笔记-基础架构/"
+                    data-tooltip="K8s笔记--基础架构"
+                    aria-label="上一篇: K8s笔记--基础架构"
+                >
                     
-                </ul>
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/06/03/Docker-Compose-For-Prometheus-Mysql-Exporter-Grafana/"
+                    data-tooltip="Docker Compose For Prometheus+Mysql_Exporter+Grafana"
+                    aria-label="下一篇: Docker Compose For Prometheus+Mysql_Exporter+Grafana"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2024 晨晨晨晨晨晨🐼. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/01/27/K8s笔记-基础架构/"
+                    data-tooltip="K8s笔记--基础架构"
+                    aria-label="上一篇: K8s笔记--基础架构"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/06/03/Docker-Compose-For-Prometheus-Mysql-Exporter-Grafana/"
+                    data-tooltip="Docker Compose For Prometheus+Mysql_Exporter+Grafana"
+                    aria-label="下一篇: Docker Compose For Prometheus+Mysql_Exporter+Grafana"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/"
+                        aria-label="分享到 Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>分享到 Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/"
+                        aria-label="分享到 Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>分享到 Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
             
         </div>
         
-    <div id='gitalk-container' class="comment link"
-        data-ae='false'
-        data-ci='633f96db28a52e4e6b22'
-        data-cs='2d368db93f1ac4831334636960a8a8da75c542b8'
-        data-r='HelloZZZC.github.io'
-        data-o='HelloZZZC'
-        data-a='HelloZZZC'
-        data-d='false'
-    >查看评论</div>
 
 
-    </div>
     
-</div>
+        
+    
 
-
-    </div>
-</div>
-</body>
-<script src="https://unpkg.com/gitalk@latest/dist/gitalk.min.js"></script>
-<script src="//lib.baomitu.com/jquery/1.8.3/jquery.min.js"></script>
-<script src="/js/plugin.js"></script>
-<script src="/js/diaspora.js"></script>
-<link rel="stylesheet" href="/photoswipe/photoswipe.css">
-<link rel="stylesheet" href="/photoswipe/default-skin/default-skin.css">
-<script src="/photoswipe/photoswipe.min.js"></script>
-<script src="/photoswipe/photoswipe-ui-default.min.js"></script>
-
-<!-- Root element of PhotoSwipe. Must have class pswp. -->
-<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
-    <!-- Background of PhotoSwipe. 
-         It's a separate element as animating opacity is faster than rgba(). -->
-    <div class="pswp__bg"></div>
-    <!-- Slides wrapper with overflow:hidden. -->
-    <div class="pswp__scroll-wrap">
-        <!-- Container that holds slides. 
-            PhotoSwipe keeps only 3 of them in the DOM to save memory.
-            Don't modify these 3 pswp__item elements, data is added later on. -->
-        <div class="pswp__container">
-            <div class="pswp__item"></div>
-            <div class="pswp__item"></div>
-            <div class="pswp__item"></div>
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
         </div>
-        <!-- Default (PhotoSwipeUI_Default) interface on top of sliding area. Can be changed. -->
-        <div class="pswp__ui pswp__ui--hidden">
-            <div class="pswp__top-bar">
-                <!--  Controls are self-explanatory. Order can be changed. -->
-                <div class="pswp__counter"></div>
-                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
-                <button class="pswp__button pswp__button--share" title="Share"></button>
-                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
-                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
-                <!-- Preloader demo http://codepen.io/dimsemenov/pen/yyBWoR -->
-                <!-- element will get class pswp__preloader--active when preloader is running -->
-                <div class="pswp__preloader">
-                    <div class="pswp__preloader__icn">
-                      <div class="pswp__preloader__cut">
-                        <div class="pswp__preloader__donut"></div>
-                      </div>
-                    </div>
-                </div>
+        
+            <img id="about-card-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">晨晨晨晨晨晨🐼</h4>
+        
+            <div id="about-card-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Java开发者、PHP开发者、DevOps爱好者</p>
+
             </div>
-            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
-                <div class="pswp__share-tooltip"></div> 
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                HangZhou，China
             </div>
-            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
-            </button>
-            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
-            </button>
-            <div class="pswp__caption">
-                <div class="pswp__caption__center"></div>
-            </div>
-        </div>
+        
     </div>
 </div>
 
+        
+        
+<div id="cover" style="background-image:url('/assets/images/cover2.jpg');"></div>
+        <!--SCRIPTS-->
+<script src="/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+<!--SCRIPTS END-->
+
+
+    
 
 
 
+
+    </body>
 </html>

@@ -1,166 +1,599 @@
 
 <!DOCTYPE html>
-<html lang="" class="loading">
+<html lang="zh-cn">
+    
 <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-    <meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>用scrapy写一个简单的爬虫 - HelloZZZC&#39;s blog</title>
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="google" content="notranslate" />
-    <meta name="keywords" content="HelloZZZC,"> 
-    <meta name="description" content="stay hungry,stay foolish,爬取豆瓣Top250的电影即上次发的《简单聊聊scrapy》这次要写一些具体操作啦！首现当然是要创建一个projectscrapy startproject doubantop。执行完命令之后就会看,"> 
-    <meta name="author" content="HelloZZZC"> 
-    <link rel="alternative" href="atom.xml" title="HelloZZZC&#39;s blog" type="application/atom+xml"> 
-    <link rel="icon" href="/img/favicon.png"> 
-    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css">
-    <link rel="stylesheet" href="/css/diaspora.css">
-    <!-- <script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
-    <script>
-         (adsbygoogle = window.adsbygoogle || []).push({
-              google_ad_client: "ca-pub-8691406134231910",
-              enable_page_level_ads: true
-         });
-    </script> --!>
-    <script async custom-element="amp-auto-ads"
-        src="https://cdn.ampproject.org/v0/amp-auto-ads-0.1.js">
-    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="晨晨晨晨晨晨🐼&#39;s blog">
+    <title>用scrapy写一个简单的爬虫 - 晨晨晨晨晨晨🐼&#39;s blog</title>
+    <meta name="author" content="晨晨晨晨晨晨🐼">
+    
+        <meta name="keywords" content="Java,PHP,DevOps,">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg"},"articleBody":"爬取豆瓣Top250的电影即上次发的《简单聊聊scrapy》这次要写一些具体操作啦！首现当然是要创建一个projectscrapy startproject doubantop。执行完命令之后就会看到项目文件夹，下面就讲几个比较重要的文件。settings.py是这个项目的配置文件，里面包含了User_Agent、Cookie、还有一些中间件的配置、还可以自己写入一些配置比如mysql的的配置（主要是因为我用的是mysql，有兴趣的话可以用mongodb）。pipelines.py是对spider解析后的数据进行插入数据库等等操作的地方。middlewares.py可以自己定义一些中间件处理user_agent和header等等。最后spider目录下就是要写具体的spider啦!下面我们看下代码，代码中有相应的注释。\nSpider123456789101112131415# -*- coding: utf-8 -*-import scrapyfrom bs4 import BeautifulSoupfrom doubantop.items import DoubantopItemclass DoubanTopSpider(scrapy):    name = 'doubantop'    start_urls = ['https://movie.douban.com/top250?start=0']    def parse_content(self, response):        #beautifulSoup是一个非常强大，简便的python库        soup = BeautifulSoup(response.body, \"lxml\")        print soup.prettify()\n\nDoubantopItem12345678910111213import scrapyclass DoubantopItem(scrapy.Item):    # define the fields for your item here like:    #定义你要爬取的字段就像下面一下    picPath = scrapy.Field()    rank = scrapy.Field()    title = scrapy.Field()    info = scrapy.Field()    score = scrapy.Field()    evaluateNum = scrapy.Field()    inq = scrapy.Field()\nDbHelper123456789101112131415161718192021222324252627282930313233#!/usr/bin/python# -*- coding: utf-8 -*-import MySQLdbfrom scrapy.utils.project import get_project_settingsimport time#定义一个数据库操作的类class DbHelper():    def __init__(self):        self.settings = get_project_settings()        self.host = self.settings['MYSQL_HOST']        self.port = self.settings['MYSQL_PORT']        self.user = self.settings['MYSQL_USER']        self.passwd = self.settings['MYSQL_PASSWORD']        self.db = self.settings['MYSQL_DBNAME']    def connection(self):        conn = MySQLdb.connect(            host = self.host,            user = self.user,            passwd = self.passwd,            db = self.db        )        return conn    def excuteSql(self, sql, params):        conn = self.connection();        cur = conn.cursor()        cur.execute(sql,params)        conn.commit()        cur.close()        conn.close()\nDoubantopPipeline1234567891011121314from doubantop.dbhelper import DbHelperimport time#在Pipeline中将我们爬取到的数据存储到数据库中，这里就用到了我们写的dbhelper类class DoubantopPipeline(object):    def process_item(self, item, spider):        self.insert_item(item)        return item    def insert_item(self, item):        sql = \"INSERT INTO `movie` ( `title`, `picPath`, `rank`, `info`, `score`, `evaluateNum`, `inq`, `createdTime`, `updatedTime`) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)\"        params = (item['title'], item['picPath'], item['rank'], item['info'], item['score'], item['evaluateNum'], item['inq'], int(time.time()), int(time.time()))        dbHelper = DbHelper()        dbHelper.excuteSql(sql, params)\n以上只是讲了一下每个类具体作用，当你了解他们的时候你就能自己写一个简单的爬虫了，当然爬虫比较关键的还是跟程序猿斗智斗勇啊，他们可不会让你这么简单就把页面给爬了，所以为了防止被Ban你还要了解为你的爬虫加入UserAgent池,Ip池，模拟登陆等等，具体爬取豆瓣top250的项目地址在github上，下面附上项目地址。—— 豆瓣Top250电影爬虫项目\n","dateCreated":"2018-05-17T16:47:21+08:00","dateModified":"2024-01-29T11:21:50+08:00","datePublished":"2018-05-17T16:47:21+08:00","description":"爬取豆瓣Top250的电影即上次发的《简单聊聊scrapy》这次要写一些具体操作啦！首现当然是要创建一个projectscrapy startproject doubantop。执行完命令之后就会看到项目文件夹，下面就讲几个比较重要的文件。settings.py是这个项目的配置文件，里面包含了User_Agent、Cookie、还有一些中间件的配置、还可以自己写入一些配置比如mysql的的配置（主要是因为我用的是mysql，有兴趣的话可以用mongodb）。pipelines.py是对spider解析后的数据进行插入数据库等等操作的地方。middlewares.py可以自己定义一些中间件处理user_agent和header等等。最后spider目录下就是要写具体的spider啦!下面我们看下代码，代码中有相应的注释。","headline":"用scrapy写一个简单的爬虫","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg","logo":{"@type":"ImageObject","url":"avatar.jpg"}},"url":"http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/","keywords":"Python"}</script>
+    <meta name="description" content="爬取豆瓣Top250的电影即上次发的《简单聊聊scrapy》这次要写一些具体操作啦！首现当然是要创建一个projectscrapy startproject doubantop。执行完命令之后就会看到项目文件夹，下面就讲几个比较重要的文件。settings.py是这个项目的配置文件，里面包含了User_Agent、Cookie、还有一些中间件的配置、还可以自己写入一些配置比如mysql的的配置（主">
+<meta name="keywords" content="Python">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="用scrapy写一个简单的爬虫">
+<meta property="og:url" content="http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/index.html">
+<meta property="og:site_name" content="晨晨晨晨晨晨🐼&#39;s blog">
+<meta property="og:description" content="爬取豆瓣Top250的电影即上次发的《简单聊聊scrapy》这次要写一些具体操作啦！首现当然是要创建一个projectscrapy startproject doubantop。执行完命令之后就会看到项目文件夹，下面就讲几个比较重要的文件。settings.py是这个项目的配置文件，里面包含了User_Agent、Cookie、还有一些中间件的配置、还可以自己写入一些配置比如mysql的的配置（主">
+<meta property="og:locale" content="zh-cn">
+<meta property="og:updated_time" content="2024-01-29T03:21:50.355Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="用scrapy写一个简单的爬虫">
+<meta name="twitter:description" content="爬取豆瓣Top250的电影即上次发的《简单聊聊scrapy》这次要写一些具体操作啦！首现当然是要创建一个projectscrapy startproject doubantop。执行完命令之后就会看到项目文件夹，下面就讲几个比较重要的文件。settings.py是这个项目的配置文件，里面包含了User_Agent、Cookie、还有一些中间件的配置、还可以自己写入一些配置比如mysql的的配置（主">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="http://hellozzzc.github.io/assets/images/avatar.jpg"/>
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/style-p7w8wxcc22z0uoeozhcztvvpgv2umorvyzcejj03qywn9okzjboqr0e7flor.min.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
 </head>
 
-<body class="loading">
-    <span id="config-title" style="display:none">HelloZZZC&#39;s blog</span>
-    <div id="loader"></div>
-    <div id="single">
-    <div id="top" style="display: block;">
-    <div class="bar" style="width: 0;"></div>
-    <a class="icon-home image-icon" href="javascript:;" data-url="http://hellozzzc.github.io"></a>
-    <div title="播放/暂停" class="icon-play"></div>
-    <h3 class="subtitle">用scrapy写一个简单的爬虫</h3>
-    <div class="social">
-        <!--<div class="like-icon">-->
-            <!--<a href="javascript:;" class="likeThis active"><span class="icon-like"></span><span class="count">76</span></a>-->
-        <!--</div>-->
-        <div>
-            <div class="share">
-                <a title="获取二维码" class="icon-scan" href="javascript:;"></a>
-            </div>
-            <div id="qr"></div>
-        </div>
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            晨晨晨晨晨晨🐼&#39;s blog
+        </a>
     </div>
-    <div class="scrollbar"></div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">晨晨晨晨晨晨🐼</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="搜索"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">搜索</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/HelloZZZC"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            用scrapy写一个简单的爬虫
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2018-05-17T16:47:21+08:00">
+	
+		    2018 年 5 月 17 日
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/爬虫/">爬虫</a>
+
+
+    
 </div>
 
-    <div class="section">
-        <div class="article">
-    <div class='main'>
-        <h1 class="title">用scrapy写一个简单的爬虫</h1>
-        <div class="stuff">
-            <span>五月 17, 2018</span>
-            
-  <ul class="post-tags-list"><li class="post-tags-list-item"><a class="post-tags-list-link" href="/tags/Python/">Python</a></li></ul>
+    
+</div>
 
-
-        </div>
-        <div class="content markdown">
-            <h3 id="爬取豆瓣Top250的电影"><a href="#爬取豆瓣Top250的电影" class="headerlink" title="爬取豆瓣Top250的电影"></a>爬取豆瓣Top250的电影</h3><p>即上次发的《简单聊聊scrapy》这次要写一些具体操作啦！首现当然是要创建一个project<code>scrapy startproject doubantop</code>。执行完命令之后就会看到项目文件夹，下面就讲几个比较重要的文件。<code>settings.py</code>是这个项目的配置文件，里面包含了User_Agent、Cookie、还有一些中间件的配置、还可以自己写入一些配置比如mysql的的配置（主要是因为我用的是mysql，有兴趣的话可以用mongodb）。<code>pipelines.py</code>是对spider解析后的数据进行插入数据库等等操作的地方。<code>middlewares.py</code>可以自己定义一些中间件处理user_agent和header等等。最后spider目录下就是要写具体的spider啦!下面我们看下代码，代码中有相应的注释。</p>
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <h3 id="爬取豆瓣Top250的电影"><a href="#爬取豆瓣Top250的电影" class="headerlink" title="爬取豆瓣Top250的电影"></a>爬取豆瓣Top250的电影</h3><p>即上次发的《简单聊聊scrapy》这次要写一些具体操作啦！首现当然是要创建一个project<code>scrapy startproject doubantop</code>。执行完命令之后就会看到项目文件夹，下面就讲几个比较重要的文件。<code>settings.py</code>是这个项目的配置文件，里面包含了User_Agent、Cookie、还有一些中间件的配置、还可以自己写入一些配置比如mysql的的配置（主要是因为我用的是mysql，有兴趣的话可以用mongodb）。<code>pipelines.py</code>是对spider解析后的数据进行插入数据库等等操作的地方。<code>middlewares.py</code>可以自己定义一些中间件处理user_agent和header等等。最后spider目录下就是要写具体的spider啦!下面我们看下代码，代码中有相应的注释。<br><a id="more"></a></p>
 <h4 id="Spider"><a href="#Spider" class="headerlink" title="Spider"></a>Spider</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># -*- coding: utf-8 -*-</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> scrapy</span><br><span class="line"><span class="keyword">from</span> bs4 <span class="keyword">import</span> BeautifulSoup</span><br><span class="line"><span class="keyword">from</span> doubantop.items <span class="keyword">import</span> DoubantopItem</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">DoubanTopSpider</span><span class="params">(scrapy)</span>:</span></span><br><span class="line">    name = <span class="string">'doubantop'</span></span><br><span class="line">    start_urls = [<span class="string">'https://movie.douban.com/top250?start=0'</span>]</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">parse_content</span><span class="params">(self, response)</span>:</span></span><br><span class="line">        <span class="comment">#beautifulSoup是一个非常强大，简便的python库</span></span><br><span class="line">        soup = BeautifulSoup(response.body, <span class="string">"lxml"</span>)</span><br><span class="line"></span><br><span class="line">        <span class="keyword">print</span> soup.prettify()</span><br></pre></td></tr></table></figure>
-<a id="more"></a>
+<!-- more -->
 <h4 id="DoubantopItem"><a href="#DoubantopItem" class="headerlink" title="DoubantopItem"></a>DoubantopItem</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> scrapy</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">DoubantopItem</span><span class="params">(scrapy.Item)</span>:</span></span><br><span class="line">    <span class="comment"># define the fields for your item here like:</span></span><br><span class="line">    <span class="comment">#定义你要爬取的字段就像下面一下</span></span><br><span class="line">    picPath = scrapy.Field()</span><br><span class="line">    rank = scrapy.Field()</span><br><span class="line">    title = scrapy.Field()</span><br><span class="line">    info = scrapy.Field()</span><br><span class="line">    score = scrapy.Field()</span><br><span class="line">    evaluateNum = scrapy.Field()</span><br><span class="line">    inq = scrapy.Field()</span><br></pre></td></tr></table></figure>
 <h4 id="DbHelper"><a href="#DbHelper" class="headerlink" title="DbHelper"></a>DbHelper</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">#!/usr/bin/python</span></span><br><span class="line"><span class="comment"># -*- coding: utf-8 -*-</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> MySQLdb</span><br><span class="line"><span class="keyword">from</span> scrapy.utils.project <span class="keyword">import</span> get_project_settings</span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line"><span class="comment">#定义一个数据库操作的类</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">DbHelper</span><span class="params">()</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">__init__</span><span class="params">(self)</span>:</span></span><br><span class="line">        self.settings = get_project_settings()</span><br><span class="line">        self.host = self.settings[<span class="string">'MYSQL_HOST'</span>]</span><br><span class="line">        self.port = self.settings[<span class="string">'MYSQL_PORT'</span>]</span><br><span class="line">        self.user = self.settings[<span class="string">'MYSQL_USER'</span>]</span><br><span class="line">        self.passwd = self.settings[<span class="string">'MYSQL_PASSWORD'</span>]</span><br><span class="line">        self.db = self.settings[<span class="string">'MYSQL_DBNAME'</span>]</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">connection</span><span class="params">(self)</span>:</span></span><br><span class="line">        conn = MySQLdb.connect(</span><br><span class="line">            host = self.host,</span><br><span class="line">            user = self.user,</span><br><span class="line">            passwd = self.passwd,</span><br><span class="line">            db = self.db</span><br><span class="line">        )</span><br><span class="line">        <span class="keyword">return</span> conn</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">excuteSql</span><span class="params">(self, sql, params)</span>:</span></span><br><span class="line">        conn = self.connection();</span><br><span class="line">        cur = conn.cursor()</span><br><span class="line">        cur.execute(sql,params)</span><br><span class="line">        conn.commit()</span><br><span class="line">        cur.close()</span><br><span class="line">        conn.close()</span><br></pre></td></tr></table></figure>
 <h4 id="DoubantopPipeline"><a href="#DoubantopPipeline" class="headerlink" title="DoubantopPipeline"></a>DoubantopPipeline</h4><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> doubantop.dbhelper <span class="keyword">import</span> DbHelper</span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line"><span class="comment">#在Pipeline中将我们爬取到的数据存储到数据库中，这里就用到了我们写的dbhelper类</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">DoubantopPipeline</span><span class="params">(object)</span>:</span></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">process_item</span><span class="params">(self, item, spider)</span>:</span></span><br><span class="line">        self.insert_item(item)</span><br><span class="line">        <span class="keyword">return</span> item</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">def</span> <span class="title">insert_item</span><span class="params">(self, item)</span>:</span></span><br><span class="line">        sql = <span class="string">"INSERT INTO `movie` ( `title`, `picPath`, `rank`, `info`, `score`, `evaluateNum`, `inq`, `createdTime`, `updatedTime`) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"</span></span><br><span class="line">        params = (item[<span class="string">'title'</span>], item[<span class="string">'picPath'</span>], item[<span class="string">'rank'</span>], item[<span class="string">'info'</span>], item[<span class="string">'score'</span>], item[<span class="string">'evaluateNum'</span>], item[<span class="string">'inq'</span>], int(time.time()), int(time.time()))</span><br><span class="line">        dbHelper = DbHelper()</span><br><span class="line">        dbHelper.excuteSql(sql, params)</span><br></pre></td></tr></table></figure>
 <p>以上只是讲了一下每个类具体作用，当你了解他们的时候你就能自己写一个简单的爬虫了，当然爬虫比较关键的还是跟程序猿斗智斗勇啊，他们可不会让你这么简单就把页面给爬了，所以为了防止被Ban你还要了解为你的爬虫加入UserAgent池,Ip池，模拟登陆等等，具体爬取豆瓣top250的项目地址在github上，下面附上项目地址。<br>—— <a href="https://github.com/HelloZZZC/scrapy-doubantop250" target="_blank" rel="noopener">豆瓣Top250电影爬虫项目</a></p>
 
-            <!--[if lt IE 9]><script>document.createElement('audio');</script><![endif]-->
-            <audio id="audio" loop="1" preload="auto" controls="controls" data-autoplay="false">
-                <source type="audio/mpeg" src="">
-            </audio>
             
-                <ul id="audio-list" style="display:none">
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/Python/">Python</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
                     
-                        <li title='0' data-url='http://link.hhtjim.com/163/5146554.mp3'></li>
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/05/26/NFS服务在阿里云服务器上的实践/"
+                    data-tooltip="NFS服务在阿里云服务器上的实践"
+                    aria-label="上一篇: NFS服务在阿里云服务器上的实践"
+                >
                     
-                </ul>
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2018/04/02/hello-world/"
+                    data-tooltip="Hello World"
+                    aria-label="下一篇: Hello World"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2024 晨晨晨晨晨晨🐼. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/05/26/NFS服务在阿里云服务器上的实践/"
+                    data-tooltip="NFS服务在阿里云服务器上的实践"
+                    aria-label="上一篇: NFS服务在阿里云服务器上的实践"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2018/04/02/hello-world/"
+                    data-tooltip="Hello World"
+                    aria-label="下一篇: Hello World"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/"
+                        aria-label="分享到 Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>分享到 Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://hellozzzc.github.io/2018/05/17/用scrapy写一个简单的爬虫/"
+                        aria-label="分享到 Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>分享到 Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
             
         </div>
         
-    <div id='gitalk-container' class="comment link"
-        data-ae='false'
-        data-ci='633f96db28a52e4e6b22'
-        data-cs='2d368db93f1ac4831334636960a8a8da75c542b8'
-        data-r='HelloZZZC.github.io'
-        data-o='HelloZZZC'
-        data-a='HelloZZZC'
-        data-d='false'
-    >查看评论</div>
 
 
-    </div>
     
-</div>
+        
+    
 
-
-    </div>
-</div>
-</body>
-<script src="https://unpkg.com/gitalk@latest/dist/gitalk.min.js"></script>
-<script src="//lib.baomitu.com/jquery/1.8.3/jquery.min.js"></script>
-<script src="/js/plugin.js"></script>
-<script src="/js/diaspora.js"></script>
-<link rel="stylesheet" href="/photoswipe/photoswipe.css">
-<link rel="stylesheet" href="/photoswipe/default-skin/default-skin.css">
-<script src="/photoswipe/photoswipe.min.js"></script>
-<script src="/photoswipe/photoswipe-ui-default.min.js"></script>
-
-<!-- Root element of PhotoSwipe. Must have class pswp. -->
-<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
-    <!-- Background of PhotoSwipe. 
-         It's a separate element as animating opacity is faster than rgba(). -->
-    <div class="pswp__bg"></div>
-    <!-- Slides wrapper with overflow:hidden. -->
-    <div class="pswp__scroll-wrap">
-        <!-- Container that holds slides. 
-            PhotoSwipe keeps only 3 of them in the DOM to save memory.
-            Don't modify these 3 pswp__item elements, data is added later on. -->
-        <div class="pswp__container">
-            <div class="pswp__item"></div>
-            <div class="pswp__item"></div>
-            <div class="pswp__item"></div>
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
         </div>
-        <!-- Default (PhotoSwipeUI_Default) interface on top of sliding area. Can be changed. -->
-        <div class="pswp__ui pswp__ui--hidden">
-            <div class="pswp__top-bar">
-                <!--  Controls are self-explanatory. Order can be changed. -->
-                <div class="pswp__counter"></div>
-                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
-                <button class="pswp__button pswp__button--share" title="Share"></button>
-                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
-                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
-                <!-- Preloader demo http://codepen.io/dimsemenov/pen/yyBWoR -->
-                <!-- element will get class pswp__preloader--active when preloader is running -->
-                <div class="pswp__preloader">
-                    <div class="pswp__preloader__icn">
-                      <div class="pswp__preloader__cut">
-                        <div class="pswp__preloader__donut"></div>
-                      </div>
-                    </div>
-                </div>
+        
+            <img id="about-card-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">晨晨晨晨晨晨🐼</h4>
+        
+            <div id="about-card-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Java开发者、PHP开发者、DevOps爱好者</p>
+
             </div>
-            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
-                <div class="pswp__share-tooltip"></div> 
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                HangZhou，China
             </div>
-            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
-            </button>
-            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
-            </button>
-            <div class="pswp__caption">
-                <div class="pswp__caption__center"></div>
-            </div>
-        </div>
+        
     </div>
 </div>
 
+        
+        
+<div id="cover" style="background-image:url('/assets/images/cover2.jpg');"></div>
+        <!--SCRIPTS-->
+<script src="/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+<!--SCRIPTS END-->
+
+
+    
 
 
 
+
+    </body>
 </html>

@@ -1,164 +1,597 @@
 
 <!DOCTYPE html>
-<html lang="" class="loading">
+<html lang="zh-cn">
+    
 <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-    <meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>记一次队列阻塞的排查历程 - HelloZZZC&#39;s blog</title>
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="google" content="notranslate" />
-    <meta name="keywords" content="HelloZZZC,"> 
-    <meta name="description" content="stay hungry,stay foolish,开头开头讲下为什么要记录这次排查历程呢？因为这个问题折腾了我很久，折腾了好几天也尝试过问一些技术的朋友、google查找相对应的资料、包括Stack Overflow上发贴求助、像阿里云发工单，最后,"> 
-    <meta name="author" content="HelloZZZC"> 
-    <link rel="alternative" href="atom.xml" title="HelloZZZC&#39;s blog" type="application/atom+xml"> 
-    <link rel="icon" href="/img/favicon.png"> 
-    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css">
-    <link rel="stylesheet" href="/css/diaspora.css">
-    <!-- <script async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
-    <script>
-         (adsbygoogle = window.adsbygoogle || []).push({
-              google_ad_client: "ca-pub-8691406134231910",
-              enable_page_level_ads: true
-         });
-    </script> --!>
-    <script async custom-element="amp-auto-ads"
-        src="https://cdn.ampproject.org/v0/amp-auto-ads-0.1.js">
-    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="晨晨晨晨晨晨🐼&#39;s blog">
+    <title>记一次队列阻塞的排查历程 - 晨晨晨晨晨晨🐼&#39;s blog</title>
+    <meta name="author" content="晨晨晨晨晨晨🐼">
+    
+        <meta name="keywords" content="Java,PHP,DevOps,">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg"},"articleBody":"开头开头讲下为什么要记录这次排查历程呢？因为这个问题折腾了我很久，折腾了好几天也尝试过问一些技术的朋友、google查找相对应的资料、包括Stack Overflow上发贴求助、像阿里云发工单，最后运气比较好还是跟另一个同事最后找到了答案。过程比较久，对自己的影响也比较深刻想记录一下。\n发生的现象这个问题是我在帮公司的主要业务从物理机迁移到阿里云上之后发生，遇到的现象是消息队列在每次重启的时候都能正常消费，但是没过多久就队列自己堵住了，并不是业务的代码异常导致。每当堵住后，重启supervisor之后消费又能继续进行，再之后就是这样的一个循环。\n排查的过程我们一开始是把可能出现的问题是放在supervisor上（毕竟看现象是消费者的问题），然后我们怀疑是否是supervisor的配置没有配对，然后找了一篇关于supervisor的文章看了下配置发现supervisor配置就那么多，仔细检查后发现并不是supervisor配置的问题。之后。我们发现同样是rabbitmq:3-management的镜像，物理机环境的rabbitmq版本跟阿里云rabbitmq版本并不一致（当时就感觉看到了一丝曙光。。。因为阿里云的该镜像是通过docker pull拉下来的），发现这个问题之后，我就去物理机上通过docker命令docker save -o image.tar rabbitmq:3-management以及docker load -i image.tar将rabbitmq的版本跟物理机上保持的一致，但遗憾的是还是没有解决问题，队列堵住还是如期而至。因为我们物理机的rabbtitmq和supervisor是没问题的，期间为了暂时解决这个问题我们将生产者挂在阿里云服务器上，消费者放在物理机的服务器上，但是一开始想的挺美好以为目前至少不会有堵住了，然后没多久就发现我们业务中包含了一些操作本地图片等业务需求，然而我们的图片都在阿里云服务器上这就导致业务出了问题，无奈之下我们还是迁移回了阿里云。当然我们也写了一个定时任务每隔几分钟就重启一次supervisor（虽然有点挫，但是挺无奈）。因为杭州服务器的消费者是没有问题的，我们还是把排查的重心放在了消费者上（期间也有怀疑是否是阿里云的问题，也给阿里云发过工单不过他们都是不是用这个技术栈的，最后也没有问到啥）。我们认为是生产者和消费者在某个时间上断开了通信，因此我到消费的docker容器中安装了tcpdump（CentOs下载的命令：yum install tcpdump），通过命令tcpdump port xxxx抓生产者和消费者之间的tcp通信，一段时间后队列再次阻塞，tcpdump的结果也跟我们猜想的一致（可以通过tcpdump tcp port xxx -w ./tcp.cap将记录记录到文件中用专业的工具进行分析），在阻塞后就抓不到任何信息并且执行netstat -nlp | grep xxxx发现之前消费者的端口未被占用说明连接已经断开了（注：文中的xxxx指的都是消费者监听的端口号）。到了这里终于有了眉目，我们最终怀疑是服务器将进程给kill了，我们的猜测也是通过执行命令dmesg | grep kill查看到了相应的日志。\n造成的原因造成的原因是linux内核的OOM机制，在内存不足的情况下，会将用户态的进程转到内核态执行，最后按照一定的规则将一个进程kill掉。因为我们物理机是16内存但是迁移到阿里云的服务器配置是8g内存，的确可能存在这个问题，主要还是我疏忽了这一点。。。\n解决办法解决办法目前当然是升级服务器啦，至少保持原先物理机的配置。真是太简单粗暴了，但是舒服！！！\n","dateCreated":"2020-05-31T17:12:09+08:00","dateModified":"2024-01-29T11:22:18+08:00","datePublished":"2020-05-31T17:12:09+08:00","description":"开头开头讲下为什么要记录这次排查历程呢？因为这个问题折腾了我很久，折腾了好几天也尝试过问一些技术的朋友、google查找相对应的资料、包括Stack Overflow上发贴求助、像阿里云发工单，最后运气比较好还是跟另一个同事最后找到了答案。过程比较久，对自己的影响也比较深刻想记录一下。","headline":"记一次队列阻塞的排查历程","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2020/05/31/记一次队列阻塞的排查历程/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg","logo":{"@type":"ImageObject","url":"avatar.jpg"}},"url":"http://hellozzzc.github.io/2020/05/31/记一次队列阻塞的排查历程/","keywords":"Linux"}</script>
+    <meta name="description" content="开头开头讲下为什么要记录这次排查历程呢？因为这个问题折腾了我很久，折腾了好几天也尝试过问一些技术的朋友、google查找相对应的资料、包括Stack Overflow上发贴求助、像阿里云发工单，最后运气比较好还是跟另一个同事最后找到了答案。过程比较久，对自己的影响也比较深刻想记录一下。">
+<meta name="keywords" content="Linux">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="记一次队列阻塞的排查历程">
+<meta property="og:url" content="http://hellozzzc.github.io/2020/05/31/记一次队列阻塞的排查历程/index.html">
+<meta property="og:site_name" content="晨晨晨晨晨晨🐼&#39;s blog">
+<meta property="og:description" content="开头开头讲下为什么要记录这次排查历程呢？因为这个问题折腾了我很久，折腾了好几天也尝试过问一些技术的朋友、google查找相对应的资料、包括Stack Overflow上发贴求助、像阿里云发工单，最后运气比较好还是跟另一个同事最后找到了答案。过程比较久，对自己的影响也比较深刻想记录一下。">
+<meta property="og:locale" content="zh-cn">
+<meta property="og:updated_time" content="2024-01-29T03:22:18.202Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="记一次队列阻塞的排查历程">
+<meta name="twitter:description" content="开头开头讲下为什么要记录这次排查历程呢？因为这个问题折腾了我很久，折腾了好几天也尝试过问一些技术的朋友、google查找相对应的资料、包括Stack Overflow上发贴求助、像阿里云发工单，最后运气比较好还是跟另一个同事最后找到了答案。过程比较久，对自己的影响也比较深刻想记录一下。">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="http://hellozzzc.github.io/assets/images/avatar.jpg"/>
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/style-p7w8wxcc22z0uoeozhcztvvpgv2umorvyzcejj03qywn9okzjboqr0e7flor.min.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
 </head>
 
-<body class="loading">
-    <span id="config-title" style="display:none">HelloZZZC&#39;s blog</span>
-    <div id="loader"></div>
-    <div id="single">
-    <div id="top" style="display: block;">
-    <div class="bar" style="width: 0;"></div>
-    <a class="icon-home image-icon" href="javascript:;" data-url="http://hellozzzc.github.io"></a>
-    <div title="播放/暂停" class="icon-play"></div>
-    <h3 class="subtitle">记一次队列阻塞的排查历程</h3>
-    <div class="social">
-        <!--<div class="like-icon">-->
-            <!--<a href="javascript:;" class="likeThis active"><span class="icon-like"></span><span class="count">76</span></a>-->
-        <!--</div>-->
-        <div>
-            <div class="share">
-                <a title="获取二维码" class="icon-scan" href="javascript:;"></a>
-            </div>
-            <div id="qr"></div>
-        </div>
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            晨晨晨晨晨晨🐼&#39;s blog
+        </a>
     </div>
-    <div class="scrollbar"></div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">晨晨晨晨晨晨🐼</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="搜索"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">搜索</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/HelloZZZC"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            记一次队列阻塞的排查历程
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2020-05-31T17:12:09+08:00">
+	
+		    2020 年 5 月 31 日
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/运维/">运维</a>
+
+
+    
 </div>
 
-    <div class="section">
-        <div class="article">
-    <div class='main'>
-        <h1 class="title">记一次队列阻塞的排查历程</h1>
-        <div class="stuff">
-            <span>五月 31, 2020</span>
-            
-  <ul class="post-tags-list"><li class="post-tags-list-item"><a class="post-tags-list-link" href="/tags/运维/">运维</a></li></ul>
+    
+</div>
 
-
-        </div>
-        <div class="content markdown">
-            <h3 id="开头"><a href="#开头" class="headerlink" title="开头"></a>开头</h3><p>开头讲下为什么要记录这次排查历程呢？因为这个问题折腾了我很久，折腾了好几天也尝试过问一些技术的朋友、google查找相对应的资料、包括Stack Overflow上发贴求助、像阿里云发工单，最后运气比较好还是跟另一个同事最后找到了答案。过程比较久，对自己的影响也比较深刻想记录一下。</p>
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <h3 id="开头"><a href="#开头" class="headerlink" title="开头"></a>开头</h3><p>开头讲下为什么要记录这次排查历程呢？因为这个问题折腾了我很久，折腾了好几天也尝试过问一些技术的朋友、google查找相对应的资料、包括Stack Overflow上发贴求助、像阿里云发工单，最后运气比较好还是跟另一个同事最后找到了答案。过程比较久，对自己的影响也比较深刻想记录一下。<br><a id="more"></a></p>
 <h3 id="发生的现象"><a href="#发生的现象" class="headerlink" title="发生的现象"></a>发生的现象</h3><p>这个问题是我在帮公司的主要业务从物理机迁移到阿里云上之后发生，遇到的现象是消息队列在每次重启的时候都能正常消费，但是没过多久就队列自己堵住了，并不是业务的代码异常导致。每当堵住后，重启supervisor之后消费又能继续进行，再之后就是这样的一个循环。</p>
 <h3 id="排查的过程"><a href="#排查的过程" class="headerlink" title="排查的过程"></a>排查的过程</h3><p>我们一开始是把可能出现的问题是放在supervisor上（毕竟看现象是消费者的问题），然后我们怀疑是否是supervisor的配置没有配对，然后找了一篇关于supervisor的文章看了下配置发现supervisor配置就那么多，仔细检查后发现并不是supervisor配置的问题。之后。我们发现同样是<code>rabbitmq:3-management</code>的镜像，物理机环境的rabbitmq版本跟阿里云rabbitmq版本并不一致（当时就感觉看到了一丝曙光。。。因为阿里云的该镜像是通过<code>docker pull</code>拉下来的），发现这个问题之后，我就去物理机上通过docker命令<code>docker save -o image.tar rabbitmq:3-management</code>以及<code>docker load -i image.tar</code>将rabbitmq的版本跟物理机上保持的一致，但遗憾的是还是没有解决问题，队列堵住还是如期而至。因为我们物理机的rabbtitmq和supervisor是没问题的，期间为了暂时解决这个问题我们将<strong>生产者</strong>挂在阿里云服务器上，<strong>消费者</strong>放在物理机的服务器上，但是一开始想的挺美好以为目前至少不会有堵住了，然后没多久就发现我们业务中包含了一些操作本地图片等业务需求，然而我们的图片都在阿里云服务器上这就导致业务出了问题，无奈之下我们还是迁移回了阿里云。当然我们也写了一个定时任务每隔几分钟就重启一次supervisor（虽然有点挫，但是挺无奈）。因为杭州服务器的消费者是没有问题的，我们还是把排查的重心放在了消费者上（期间也有怀疑是否是阿里云的问题，也给阿里云发过工单不过他们都是不是用这个技术栈的，最后也没有问到啥）。我们认为是生产者和消费者在某个时间上断开了通信，因此我到消费的docker容器中安装了tcpdump（CentOs下载的命令：yum install tcpdump），通过命令<code>tcpdump port xxxx</code>抓生产者和消费者之间的tcp通信，一段时间后队列再次阻塞，tcpdump的结果也跟我们猜想的一致（可以通过<code>tcpdump tcp port xxx -w ./tcp.cap</code>将记录记录到文件中用专业的工具进行分析），在阻塞后就抓不到任何信息并且执行<code>netstat -nlp | grep xxxx</code>发现之前消费者的端口未被占用说明连接已经断开了（注：文中的xxxx指的都是消费者监听的端口号）。到了这里终于有了眉目，我们最终怀疑是服务器将进程给kill了，我们的猜测也是通过执行命令<code>dmesg | grep kill</code>查看到了相应的日志。</p>
 <h3 id="造成的原因"><a href="#造成的原因" class="headerlink" title="造成的原因"></a>造成的原因</h3><p>造成的原因是linux内核的OOM机制，在内存不足的情况下，会将用户态的进程转到内核态执行，最后按照一定的规则将一个进程kill掉。因为我们物理机是16内存但是迁移到阿里云的服务器配置是8g内存，的确可能存在这个问题，主要还是我疏忽了这一点。。。</p>
 <h3 id="解决办法"><a href="#解决办法" class="headerlink" title="解决办法"></a>解决办法</h3><p>解决办法目前当然是升级服务器啦，至少保持原先物理机的配置。真是太简单粗暴了，但是舒服！！！</p>
 
-            <!--[if lt IE 9]><script>document.createElement('audio');</script><![endif]-->
-            <audio id="audio" loop="1" preload="auto" controls="controls" data-autoplay="false">
-                <source type="audio/mpeg" src="">
-            </audio>
             
-                <ul id="audio-list" style="display:none">
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/Linux/">Linux</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
                     
-                        <li title='0' data-url='http://link.hhtjim.com/163/5146554.mp3'></li>
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/06/03/Docker-Compose-For-Prometheus-Mysql-Exporter-Grafana/"
+                    data-tooltip="Docker Compose For Prometheus+Mysql_Exporter+Grafana"
+                    aria-label="上一篇: Docker Compose For Prometheus+Mysql_Exporter+Grafana"
+                >
                     
-                </ul>
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/05/26/NFS服务在阿里云服务器上的实践/"
+                    data-tooltip="NFS服务在阿里云服务器上的实践"
+                    aria-label="下一篇: NFS服务在阿里云服务器上的实践"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2020/05/31/记一次队列阻塞的排查历程/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2020/05/31/记一次队列阻塞的排查历程/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2020/05/31/记一次队列阻塞的排查历程/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2024 晨晨晨晨晨晨🐼. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/06/03/Docker-Compose-For-Prometheus-Mysql-Exporter-Grafana/"
+                    data-tooltip="Docker Compose For Prometheus+Mysql_Exporter+Grafana"
+                    aria-label="上一篇: Docker Compose For Prometheus+Mysql_Exporter+Grafana"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/05/26/NFS服务在阿里云服务器上的实践/"
+                    data-tooltip="NFS服务在阿里云服务器上的实践"
+                    aria-label="下一篇: NFS服务在阿里云服务器上的实践"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2020/05/31/记一次队列阻塞的排查历程/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2020/05/31/记一次队列阻塞的排查历程/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2020/05/31/记一次队列阻塞的排查历程/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2020/05/31/记一次队列阻塞的排查历程/"
+                        aria-label="分享到 Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>分享到 Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2020/05/31/记一次队列阻塞的排查历程/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://hellozzzc.github.io/2020/05/31/记一次队列阻塞的排查历程/"
+                        aria-label="分享到 Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>分享到 Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
             
         </div>
         
-    <div id='gitalk-container' class="comment link"
-        data-ae='false'
-        data-ci='633f96db28a52e4e6b22'
-        data-cs='2d368db93f1ac4831334636960a8a8da75c542b8'
-        data-r='HelloZZZC.github.io'
-        data-o='HelloZZZC'
-        data-a='HelloZZZC'
-        data-d='false'
-    >查看评论</div>
 
 
-    </div>
     
-</div>
+        
+    
 
-
-    </div>
-</div>
-</body>
-<script src="https://unpkg.com/gitalk@latest/dist/gitalk.min.js"></script>
-<script src="//lib.baomitu.com/jquery/1.8.3/jquery.min.js"></script>
-<script src="/js/plugin.js"></script>
-<script src="/js/diaspora.js"></script>
-<link rel="stylesheet" href="/photoswipe/photoswipe.css">
-<link rel="stylesheet" href="/photoswipe/default-skin/default-skin.css">
-<script src="/photoswipe/photoswipe.min.js"></script>
-<script src="/photoswipe/photoswipe-ui-default.min.js"></script>
-
-<!-- Root element of PhotoSwipe. Must have class pswp. -->
-<div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
-    <!-- Background of PhotoSwipe. 
-         It's a separate element as animating opacity is faster than rgba(). -->
-    <div class="pswp__bg"></div>
-    <!-- Slides wrapper with overflow:hidden. -->
-    <div class="pswp__scroll-wrap">
-        <!-- Container that holds slides. 
-            PhotoSwipe keeps only 3 of them in the DOM to save memory.
-            Don't modify these 3 pswp__item elements, data is added later on. -->
-        <div class="pswp__container">
-            <div class="pswp__item"></div>
-            <div class="pswp__item"></div>
-            <div class="pswp__item"></div>
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
         </div>
-        <!-- Default (PhotoSwipeUI_Default) interface on top of sliding area. Can be changed. -->
-        <div class="pswp__ui pswp__ui--hidden">
-            <div class="pswp__top-bar">
-                <!--  Controls are self-explanatory. Order can be changed. -->
-                <div class="pswp__counter"></div>
-                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
-                <button class="pswp__button pswp__button--share" title="Share"></button>
-                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
-                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
-                <!-- Preloader demo http://codepen.io/dimsemenov/pen/yyBWoR -->
-                <!-- element will get class pswp__preloader--active when preloader is running -->
-                <div class="pswp__preloader">
-                    <div class="pswp__preloader__icn">
-                      <div class="pswp__preloader__cut">
-                        <div class="pswp__preloader__donut"></div>
-                      </div>
-                    </div>
-                </div>
+        
+            <img id="about-card-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">晨晨晨晨晨晨🐼</h4>
+        
+            <div id="about-card-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Java开发者、PHP开发者、DevOps爱好者</p>
+
             </div>
-            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
-                <div class="pswp__share-tooltip"></div> 
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                HangZhou，China
             </div>
-            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)">
-            </button>
-            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)">
-            </button>
-            <div class="pswp__caption">
-                <div class="pswp__caption__center"></div>
-            </div>
-        </div>
+        
     </div>
 </div>
 
+        
+        
+<div id="cover" style="background-image:url('/assets/images/cover2.jpg');"></div>
+        <!--SCRIPTS-->
+<script src="/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+<!--SCRIPTS END-->
+
+
+    
 
 
 
+
+    </body>
 </html>
