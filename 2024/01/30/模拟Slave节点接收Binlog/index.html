@@ -1,0 +1,621 @@
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="晨晨晨晨晨晨🐼&#39;s blog">
+    <title>模拟Slave节点接收Binlog - 晨晨晨晨晨晨🐼&#39;s blog</title>
+    <meta name="author" content="晨晨晨晨晨晨🐼">
+    
+        <meta name="keywords" content="Java,PHP,DevOps,">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg"},"articleBody":"前言不知道阅读该篇文章的同学有没有听说过阿里的Binlog增量订阅组件Canal。通过Canal的简介我们也能大致看出Canal Server模拟了Mysql的Slave节点向Master发送Dump请求推送Binlog日志，再Canal Server接收到请求后对日志文件做数据过滤、加工最终推送到下游客户端（如ES、Hbase、Kafka）以实现诸如业务Cache刷新、业务增量数据处理等。该篇文章主要针对Canal Server如何模拟Slave节点并让Master节点推送Binlog日志，Canal组件肯定会对性能如IO这块做优化，这里建议去学习Canal整体的架构设计。\n主从复制在了解如何伪装Slave节点前，我认为得先浅浅了解一下Mysql主从复制的原理，下图是Mysql主从复制的原理图：\n\nSlave创建俩个线程分别是I/O线程、SQL线程。\nSlave创建的I/O线程向Master节点请求Binlog日志。\nMaster为Slave的I/O线程创建Dump线程Push Binlog日志。\nSlave的I/O线程将数据写入RelayLog。\nSlave的SQL线程对语句分析并执行。\n\n如何伪装Slave从上图我们可以大致了解Canal的流程，那我们这里进入正题看看Canal Server如何伪装成Slave节点。\nMysql协议包定义我们可以大致猜到需要伪装成Slave肯定需要跟Mysql进行TCP连接，那么我们得先了解Mysql针对通信协议的数据包的结构。如下图所示：首先Mysql协议定义的Packet，Header占4字节包含Payload_Length占3个字节、SequenceID占1个字节（该字段从00开始并以一次通信结束后重新开始，即Mysql发送OK_Parket、Err_Packet），其次由于Payload_Length仅有3个字节，因此Payload最大为(2^24 - 1)Byte，因此才有了上图的三种情况，当Payload的长度 &lt; ffffff时，只需发一个包即可、当Payload的长度 = ffffff时，需要在发一个空包、当Payload的长度 &gt; ffffff时，需要分包发送。\nMysql连接生命周期连接阶段首先我们需要跟Mysql建立连接，因此我们需要进行Handshake，我们看下Mysql连接阶段的流程：\n\nMysql Server向客户端发送Initial Handshake Packet。\n客户端向Mysql Server发送Handshake Response Packet。\n若认证成功，Mysql Server向客户端发送OK_Packet。整个过程我们可以简单的概括为客户端与服务端互相交换能力以及服务端对客户端进行认证的过程。（SSL握手会比普通握手多一步SSL交换创建SSL连接的过程，但本文的重点不在此，有兴趣的同学可以去Mysql官方文档学习。）\n\n针对连接阶段的补充\nClient端可向Server端发起SSL握手，方式是Client端在接收到Initial Handshake Packet后回复Protocol::SSLRequest，通过SSL Exchange使得建立SSL连接，之后在回复Handshake Response Packet。\n当我们需要知道Server端是否支持某个CapabilityFlag时，只需要将Server端返回的CapabilityFlags按位与具体的CapabilityFlag即可，如CLIENT_LONG_PASSWORD = CapabilityFlags &amp; CLIENT_LONG_PASSWORD。同理在客户端需要让服务端了解我们需要的能力只需将我们需要的逻辑按位或即可，如CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG。\n\n实现代码Initial Handshake Packet123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899100101102103## Protocol::HandshakeV10 3.21.0版本之后，都是HandshakeV10的版本。旧版本则为HandshakeV9。def parse_initial_handshake_packet(s):    \"\"\"    解析Mysql Server发的包    :param s:    :return:    1              [0a] protocol version    string[NUL]    server version    4              connection id    string[8]      auth-plugin-data-part-1    1              [00] filler    2              capability flags (lower 2 bytes)      if more data in the packet:    1              character set    2              status flags    2              capability flags (upper 2 bytes)      if capabilities &amp; CLIENT_PLUGIN_AUTH &#123;    1              length of auth-plugin-data      &#125; else &#123;    1              [00]      &#125;    string[10]     reserved (all [00])      if capabilities &amp; CLIENT_SECURE_CONNECTION &#123;    string[$len]   auth-plugin-data-part-2 ($len=MAX(13, length of auth-plugin-data - 8))      if capabilities &amp; CLIENT_PLUGIN_AUTH &#123;    string[NUL]    auth-plugin name      &#125;    \"\"\"    packet = []    input_buffer = s.recv(16384)    packet.append(input_buffer)    packet = b''.join(packet).hex()    index = 0    # int&lt;3&gt; 3个字节长度的payload_length    payload_length = packet[index:6]    index += 6    # int&lt;1&gt; 1个字节长度的sequence_id    sequence_id = packet[index:8]    index += 2    # int&lt;1&gt; 1个字节长度的协议等级    protocol_version = packet[index:10]    index += 2    # string&lt;NULL&gt; 已NULL结尾的Mysql服务器版本    server_version = ''    for i in range(int(len(packet[index:]) / 2)):        start = index        end = index + 2        server_version_part = packet[start:end]        server_version += server_version_part        index += 2        if server_version_part == '00':            break    # int&lt;4&gt; 线程id    thread_id = packet[index:index + 8]    index += 8    # string&lt;8&gt; 密码加密前8位    auth_plugin_data_part_1 = packet[index:index + 16]    index += 16    # int&lt;1&gt; 填充位    filter_part = packet[index:index + 2]    index += 2    # int&lt;2&gt; 功能标识低位    capability_flags_1 = packet[index:index + 4]    index += 4    # int&lt;1&gt; 字符编码格式    character_set = packet[index:index + 2]    index += 2    # int&lt;2&gt; 服务器状态标识    status_flags = packet[index:index + 4]    index += 4    # int&lt;2&gt; 功能标识高位    capability_flags_2 = packet[index:index + 4]    index += 4    # int&lt;1&gt; 加密随机数长度，若不支持CLIENT_PLUGIN_AUTH则为00    auth_plugin_data_len = packet[index:index + 2]    index += 2    # string&lt;10&gt; 保留位，都是00    reserved = packet[index:index + 20]    index += 20    # string&lt;13&gt; 密码加密后13位    auth_plugin_data_part_2 = packet[index:index + 26]    index += 26    # 已NULL结尾的字符串，用户认证方式名称    auth_plugin_name = packet[index:]        return &#123;        \"payload_length\": payload_length,        \"sequence_id\": sequence_id,        \"protocol_version\": protocol_version,        \"server_version\": server_version,        \"thread_id\": thread_id,        \"auth_plugin_data_part_1\": auth_plugin_data_part_1,        \"filter\": filter_part,        \"capability_flags_1\": capability_flags_1,        \"character_set\": character_set,        \"status_flags\": status_flags,        \"capability_flags_2\": capability_flags_2,        \"auth_plugin_data_len\": auth_plugin_data_len,        \"reserved\": reserved,        \"auth_plugin_data_part_2\": auth_plugin_data_part_2,        \"auth_plugin_name\": auth_plugin_name    &#125;\nHandshake Resp Packet\n123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566## Protocol::HandshakeResponse41 当Server的CapabilityFlags不支持CLIENT_PROTOCOL_41，则协议版本为HandshakeReponse320。def send_handshake_resp_packet(s, initial_resp):    \"\"\"    Client发送相应包    :param s:    :param initial_resp:    :return:    4              capability flags, CLIENT_PROTOCOL_41 always set    4              max-packet size    1              character set    string[23]     reserved (all [0])    string[NUL]    username      if capabilities &amp; CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA &#123;    lenenc-int     length of auth-response    string[n]      auth-response      &#125; else if capabilities &amp; CLIENT_SECURE_CONNECTION &#123;    1              length of auth-response    string[n]      auth-response      &#125; else &#123;    string[NUL]    auth-response      &#125;      if capabilities &amp; CLIENT_CONNECT_WITH_DB &#123;    string[NUL]    database      &#125;      if capabilities &amp; CLIENT_PLUGIN_AUTH &#123;    string[NUL]    auth plugin name      &#125;      if capabilities &amp; CLIENT_CONNECT_ATTRS &#123;    lenenc-int     length of all key-values    lenenc-str     key    lenenc-str     value       if-more data in 'length of all key-values', more keys and value pairs      &#125;    \"\"\"    client_long_password = 1    client_long_flag = 4    client_connect_with_db = 8    client_protocol_41 = 512    client_interactive = 1024    client_transactions = 8192    client_secure_connection = 32768    client_multi_statements = 1 &lt;&lt; 16    client_plugin_auth = 1 &lt;&lt; 19    client_flag = (client_long_password | client_long_flag | client_connect_with_db | client_protocol_41 |                   client_interactive | client_transactions | client_secure_connection | client_multi_statements |                   client_plugin_auth).to_bytes(length=4, byteorder='little')    max_packet_size = b'\\x00\\xff\\xff\\xff'    character_set = b'\\x21'    filter_part = b'\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00'    user_name = 'canal'.encode('utf-8') + b'\\x00'    password = 'canal'.encode('utf-8')    auth_response = encrypt_password(        password,        initial_resp.get('auth_plugin_data_part_1'),        initial_resp.get('auth_plugin_data_part_2')    )    auth_response_length = len(auth_response).to_bytes(length=1, byteorder='little')    database = 'learning2'.encode('utf-8') + b'\\x00'    auth_plugin_name = 'mysql_native_password'.encode('utf-8') + b'\\x00'    payload = client_flag + max_packet_size + character_set + filter_part + user_name \\              + auth_response_length + auth_response + database + auth_plugin_name    header_length = len(payload).to_bytes(length=3, byteorder='little')    sequence_id = b'\\x01'    packet = header_length + sequence_id + payload    s.send(packet)\n注意密码加密方式：auth_plugin_name为mysql_native_password，其密码加密方式为：SHA1(pwd) XOR SHA1(20 byte scramble concat SHA1(SHA1(pwd)))\n命令行阶段当我们在连接阶段接收到Mysql Server推送的OK_Parcket说明已经认证成功，之后Mysql将进入命令行阶段，此时我们就可以像Mysql发送命令如COM_REGISTER_SLAVE、COM_BINLOG_DUMP实现Slave节点注册以及向Mysql Server发送Binlog Dump命令。\n实现代码发送注册Slave Command1234567891011121314151617181920212223242526272829303132333435def send_com_register_slave(s):    \"\"\"    发送命令注册从节点    :param s:    :return:    1              [15] COM_REGISTER_SLAVE    4              server-id    1              slaves hostname length    string[$len]   slaves hostname    1              slaves user len    string[$len]   slaves user    1              slaves password len    string[$len]   slaves password    2              slaves mysql-port    4              replication rank    4              master-id    \"\"\"    (localhost, local_port) = s.getsockname()    command = b'\\x15'    server_id = (3).to_bytes(length=4, byteorder='little')    hostname = localhost.encode('utf-8')    hostname_length = len(localhost.encode('utf-8')).to_bytes(length=1, byteorder='little')    slave_user = 'canal'.encode('utf-8')    slave_user_length = len(slave_user).to_bytes(length=1, byteorder='little')    slave_password = 'canal'.encode('utf-8')    slave_password_length = len(slave_password).to_bytes(length=1, byteorder='little')    slave_mysql_port = local_port.to_bytes(length=2, byteorder='little')    replication_rank = (0).to_bytes(length=4, byteorder='little')    master_id = (0).to_bytes(length=4, byteorder='little')    payload = command + server_id + hostname_length + hostname + slave_user_length + slave_user + \\              slave_password_length + slave_password + slave_mysql_port + replication_rank + master_id    header = len(payload).to_bytes(length=3, byteorder='little')    sequence_id = b'\\x00'    packet = header + sequence_id + payload    s.send(packet)\n发送Binlog Dump Command123456789101112131415161718192021def send_com_binlog_dump(s):    \"\"\"    发送dump日志的命令    :param s:    :return:    1              [12] COM_BINLOG_DUMP    4              binlog-pos    2              flags    4              server-id    string[EOF]    binlog-filename    \"\"\"    command = b'\\x12'    binlog_pos = (100).to_bytes(length=4, byteorder='little')    flags = b'\\x00\\x00'    server_id = (3).to_bytes(length=4, byteorder='little')    binlog_filename = 'binlog.000502'.encode('utf-8')    payload = command + binlog_pos + flags + server_id + binlog_filename    header = len(payload).to_bytes(length=3, byteorder='little')    sequence_id = b'\\x00'    packet = header + sequence_id + payload    s.send(packet)\n总结我们通过了解Mysql的生命周期知道当我们连接成功后将进入命令行阶段，官方叫Command Phase。此时我们就可以向Mysql Server发送命令实现Slave的伪装。以上代码仅仅只是展示了如何实现Slave节点的注册和发送Binlog Dump指令，对Canal完整流程感兴趣的同学建议去阅读源码，毕竟一个好的组件设计需要考虑IO性能优化（诸如零拷贝、NIO等）、代码的可扩展性等等。\n","dateCreated":"2024-01-30T17:03:27+08:00","dateModified":"2024-01-30T17:04:19+08:00","datePublished":"2024-01-30T17:03:27+08:00","description":"前言不知道阅读该篇文章的同学有没有听说过阿里的Binlog增量订阅组件Canal。通过Canal的简介我们也能大致看出Canal Server模拟了Mysql的Slave节点向Master发送Dump请求推送Binlog日志，再Canal Server接收到请求后对日志文件做数据过滤、加工最终推送到下游客户端（如ES、Hbase、Kafka）以实现诸如业务Cache刷新、业务增量数据处理等。该篇文章主要针对Canal Server如何模拟Slave节点并让Master节点推送Binlog日志，Canal组件肯定会对性能如IO这块做优化，这里建议去学习Canal整体的架构设计。","headline":"模拟Slave节点接收Binlog","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2024/01/30/模拟Slave节点接收Binlog/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg","logo":{"@type":"ImageObject","url":"avatar.jpg"}},"url":"http://hellozzzc.github.io/2024/01/30/模拟Slave节点接收Binlog/","keywords":"Python, Mysql"}</script>
+    <meta name="description" content="前言不知道阅读该篇文章的同学有没有听说过阿里的Binlog增量订阅组件Canal。通过Canal的简介我们也能大致看出Canal Server模拟了Mysql的Slave节点向Master发送Dump请求推送Binlog日志，再Canal Server接收到请求后对日志文件做数据过滤、加工最终推送到下游客户端（如ES、Hbase、Kafka）以实现诸如业务Cache刷新、业务增量数据处理等。该篇文">
+<meta name="keywords" content="Python,Mysql">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="模拟Slave节点接收Binlog">
+<meta property="og:url" content="http://hellozzzc.github.io/2024/01/30/模拟Slave节点接收Binlog/index.html">
+<meta property="og:site_name" content="晨晨晨晨晨晨🐼&#39;s blog">
+<meta property="og:description" content="前言不知道阅读该篇文章的同学有没有听说过阿里的Binlog增量订阅组件Canal。通过Canal的简介我们也能大致看出Canal Server模拟了Mysql的Slave节点向Master发送Dump请求推送Binlog日志，再Canal Server接收到请求后对日志文件做数据过滤、加工最终推送到下游客户端（如ES、Hbase、Kafka）以实现诸如业务Cache刷新、业务增量数据处理等。该篇文">
+<meta property="og:locale" content="zh-cn">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/canal_introduction.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/master_slave.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/canal_structure.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/packet_defination.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/mysql_connectoin_step.png">
+<meta property="og:updated_time" content="2024-01-30T09:04:19.025Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="模拟Slave节点接收Binlog">
+<meta name="twitter:description" content="前言不知道阅读该篇文章的同学有没有听说过阿里的Binlog增量订阅组件Canal。通过Canal的简介我们也能大致看出Canal Server模拟了Mysql的Slave节点向Master发送Dump请求推送Binlog日志，再Canal Server接收到请求后对日志文件做数据过滤、加工最终推送到下游客户端（如ES、Hbase、Kafka）以实现诸如业务Cache刷新、业务增量数据处理等。该篇文">
+<meta name="twitter:image" content="http://hellozzzc.github.io/assets/images/posts/canal_introduction.png">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="http://hellozzzc.github.io/assets/images/avatar.jpg"/>
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/style-p7w8wxcc22z0uoeozhcztvvpgv2umorvyzcejj03qywn9okzjboqr0e7flor.min.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            晨晨晨晨晨晨🐼&#39;s blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">晨晨晨晨晨晨🐼</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="搜索"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">搜索</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/HelloZZZC"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            模拟Slave节点接收Binlog
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2024-01-30T17:03:27+08:00">
+	
+		    2024 年 1 月 30 日
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/后端技术/">后端技术</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>不知道阅读该篇文章的同学有没有听说过阿里的Binlog增量订阅组件<a href="https://github.com/alibaba/canal" target="_blank" rel="noopener">Canal</a>。通过Canal的简介我们也能大致看出Canal Server模拟了Mysql的Slave节点向Master发送Dump请求推送Binlog日志，再Canal Server接收到请求后对日志文件做数据过滤、加工最终推送到下游客户端（如ES、Hbase、Kafka）以实现诸如业务Cache刷新、业务增量数据处理等。<br><img src="/assets/images/posts/canal_introduction.png" alt="canal-introduction"><br><strong>该篇文章主要针对Canal Server如何模拟Slave节点并让Master节点推送Binlog日志，Canal组件肯定会对性能如IO这块做优化，这里建议去学习Canal整体的架构设计。</strong><br><a id="more"></a></p>
+<h2 id="主从复制"><a href="#主从复制" class="headerlink" title="主从复制"></a>主从复制</h2><p>在了解如何伪装Slave节点前，我认为得先浅浅了解一下Mysql主从复制的原理，下图是Mysql主从复制的原理图：<br><img src="/assets/images/posts/master_slave.png" alt="master-slave"></p>
+<ol>
+<li>Slave创建俩个线程分别是I/O线程、SQL线程。</li>
+<li>Slave创建的I/O线程向Master节点请求Binlog日志。</li>
+<li>Master为Slave的I/O线程创建Dump线程Push Binlog日志。</li>
+<li>Slave的I/O线程将数据写入RelayLog。</li>
+<li>Slave的SQL线程对语句分析并执行。</li>
+</ol>
+<h2 id="如何伪装Slave"><a href="#如何伪装Slave" class="headerlink" title="如何伪装Slave"></a>如何伪装Slave</h2><p><img src="/assets/images/posts/canal_structure.png" alt="canal-structure"><br>从上图我们可以大致了解Canal的流程，那我们这里进入正题看看Canal Server如何伪装成Slave节点。</p>
+<h3 id="Mysql协议包定义"><a href="#Mysql协议包定义" class="headerlink" title="Mysql协议包定义"></a>Mysql协议包定义</h3><p>我们可以大致猜到需要伪装成Slave肯定需要跟Mysql进行TCP连接，那么我们得先了解Mysql针对通信协议的数据包的结构。如下图所示：<br><img src="/assets/images/posts/packet_defination.png" alt="packet-defination"><br>首先Mysql协议定义的Packet，Header占4字节包含Payload_Length占3个字节、SequenceID占1个字节（该字段从00开始并以一次通信结束后重新开始，即Mysql发送OK_Parket、Err_Packet），其次由于Payload_Length仅有3个字节，因此Payload最大为(2^24 - 1)Byte，因此才有了上图的三种情况，当Payload的长度 &lt; ffffff时，只需发一个包即可、当Payload的长度 = ffffff时，需要在发一个空包、当Payload的长度 &gt; ffffff时，需要分包发送。</p>
+<h3 id="Mysql连接生命周期"><a href="#Mysql连接生命周期" class="headerlink" title="Mysql连接生命周期"></a>Mysql连接生命周期</h3><h4 id="连接阶段"><a href="#连接阶段" class="headerlink" title="连接阶段"></a>连接阶段</h4><p>首先我们需要跟Mysql建立连接，因此我们需要进行Handshake，我们看下Mysql连接阶段的流程：<br><img src="/assets/images/posts/mysql_connectoin_step.png" alt="mysql-connectoin-step"></p>
+<ol>
+<li>Mysql Server向客户端发送Initial Handshake Packet。</li>
+<li>客户端向Mysql Server发送Handshake Response Packet。</li>
+<li>若认证成功，Mysql Server向客户端发送OK_Packet。<br>整个过程我们可以简单的概括为客户端与服务端互相交换能力以及服务端对客户端进行认证的过程。（SSL握手会比普通握手多一步SSL交换创建SSL连接的过程，但本文的重点不在此，有兴趣的同学可以去Mysql官方文档学习。）</li>
+</ol>
+<h5 id="针对连接阶段的补充"><a href="#针对连接阶段的补充" class="headerlink" title="针对连接阶段的补充"></a>针对连接阶段的补充</h5><ol>
+<li>Client端可向Server端发起SSL握手，方式是Client端在接收到Initial Handshake Packet后回复<a href="https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_connection_phase_packets_protocol_ssl_request.html" target="_blank" rel="noopener">Protocol::SSLRequest</a>，通过SSL Exchange使得建立SSL连接，之后在回复Handshake Response Packet。</li>
+<li>当我们需要知道Server端是否支持某个<a href="https://dev.mysql.com/doc/dev/mysql-server/latest/group__group__cs__capabilities__flags.html" target="_blank" rel="noopener">CapabilityFlag</a>时，只需要将Server端返回的CapabilityFlags按位与具体的CapabilityFlag即可，如<a href="https://dev.mysql.com/doc/dev/mysql-server/latest/group__group__cs__capabilities__flags.html#ga52d3a3f2f6a84a0f427c16bd7bd3df1f" target="_blank" rel="noopener">CLIENT_LONG_PASSWORD</a> = CapabilityFlags &amp; CLIENT_LONG_PASSWORD。同理在客户端需要让服务端了解我们需要的能力只需将我们需要的逻辑按位或即可，如CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG。</li>
+</ol>
+<h5 id="实现代码"><a href="#实现代码" class="headerlink" title="实现代码"></a>实现代码</h5><p><strong>Initial Handshake Packet</strong><br><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">## Protocol::HandshakeV10 3.21.0版本之后，都是HandshakeV10的版本。旧版本则为HandshakeV9。</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">parse_initial_handshake_packet</span><span class="params">(s)</span>:</span></span><br><span class="line">    <span class="string">"""</span></span><br><span class="line"><span class="string">    解析Mysql Server发的包</span></span><br><span class="line"><span class="string">    :param s:</span></span><br><span class="line"><span class="string">    :return:</span></span><br><span class="line"><span class="string">    1              [0a] protocol version</span></span><br><span class="line"><span class="string">    string[NUL]    server version</span></span><br><span class="line"><span class="string">    4              connection id</span></span><br><span class="line"><span class="string">    string[8]      auth-plugin-data-part-1</span></span><br><span class="line"><span class="string">    1              [00] filler</span></span><br><span class="line"><span class="string">    2              capability flags (lower 2 bytes)</span></span><br><span class="line"><span class="string">      if more data in the packet:</span></span><br><span class="line"><span class="string">    1              character set</span></span><br><span class="line"><span class="string">    2              status flags</span></span><br><span class="line"><span class="string">    2              capability flags (upper 2 bytes)</span></span><br><span class="line"><span class="string">      if capabilities &amp; CLIENT_PLUGIN_AUTH &#123;</span></span><br><span class="line"><span class="string">    1              length of auth-plugin-data</span></span><br><span class="line"><span class="string">      &#125; else &#123;</span></span><br><span class="line"><span class="string">    1              [00]</span></span><br><span class="line"><span class="string">      &#125;</span></span><br><span class="line"><span class="string">    string[10]     reserved (all [00])</span></span><br><span class="line"><span class="string">      if capabilities &amp; CLIENT_SECURE_CONNECTION &#123;</span></span><br><span class="line"><span class="string">    string[$len]   auth-plugin-data-part-2 ($len=MAX(13, length of auth-plugin-data - 8))</span></span><br><span class="line"><span class="string">      if capabilities &amp; CLIENT_PLUGIN_AUTH &#123;</span></span><br><span class="line"><span class="string">    string[NUL]    auth-plugin name</span></span><br><span class="line"><span class="string">      &#125;</span></span><br><span class="line"><span class="string">    """</span></span><br><span class="line">    packet = []</span><br><span class="line">    input_buffer = s.recv(<span class="number">16384</span>)</span><br><span class="line">    packet.append(input_buffer)</span><br><span class="line">    packet = <span class="string">b''</span>.join(packet).hex()</span><br><span class="line">    index = <span class="number">0</span></span><br><span class="line">    <span class="comment"># int&lt;3&gt; 3个字节长度的payload_length</span></span><br><span class="line">    payload_length = packet[index:<span class="number">6</span>]</span><br><span class="line">    index += <span class="number">6</span></span><br><span class="line">    <span class="comment"># int&lt;1&gt; 1个字节长度的sequence_id</span></span><br><span class="line">    sequence_id = packet[index:<span class="number">8</span>]</span><br><span class="line">    index += <span class="number">2</span></span><br><span class="line">    <span class="comment"># int&lt;1&gt; 1个字节长度的协议等级</span></span><br><span class="line">    protocol_version = packet[index:<span class="number">10</span>]</span><br><span class="line">    index += <span class="number">2</span></span><br><span class="line">    <span class="comment"># string&lt;NULL&gt; 已NULL结尾的Mysql服务器版本</span></span><br><span class="line">    server_version = <span class="string">''</span></span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> range(int(len(packet[index:]) / <span class="number">2</span>)):</span><br><span class="line">        start = index</span><br><span class="line">        end = index + <span class="number">2</span></span><br><span class="line">        server_version_part = packet[start:end]</span><br><span class="line">        server_version += server_version_part</span><br><span class="line">        index += <span class="number">2</span></span><br><span class="line">        <span class="keyword">if</span> server_version_part == <span class="string">'00'</span>:</span><br><span class="line">            <span class="keyword">break</span></span><br><span class="line">    <span class="comment"># int&lt;4&gt; 线程id</span></span><br><span class="line">    thread_id = packet[index:index + <span class="number">8</span>]</span><br><span class="line">    index += <span class="number">8</span></span><br><span class="line">    <span class="comment"># string&lt;8&gt; 密码加密前8位</span></span><br><span class="line">    auth_plugin_data_part_1 = packet[index:index + <span class="number">16</span>]</span><br><span class="line">    index += <span class="number">16</span></span><br><span class="line">    <span class="comment"># int&lt;1&gt; 填充位</span></span><br><span class="line">    filter_part = packet[index:index + <span class="number">2</span>]</span><br><span class="line">    index += <span class="number">2</span></span><br><span class="line">    <span class="comment"># int&lt;2&gt; 功能标识低位</span></span><br><span class="line">    capability_flags_1 = packet[index:index + <span class="number">4</span>]</span><br><span class="line">    index += <span class="number">4</span></span><br><span class="line">    <span class="comment"># int&lt;1&gt; 字符编码格式</span></span><br><span class="line">    character_set = packet[index:index + <span class="number">2</span>]</span><br><span class="line">    index += <span class="number">2</span></span><br><span class="line">    <span class="comment"># int&lt;2&gt; 服务器状态标识</span></span><br><span class="line">    status_flags = packet[index:index + <span class="number">4</span>]</span><br><span class="line">    index += <span class="number">4</span></span><br><span class="line">    <span class="comment"># int&lt;2&gt; 功能标识高位</span></span><br><span class="line">    capability_flags_2 = packet[index:index + <span class="number">4</span>]</span><br><span class="line">    index += <span class="number">4</span></span><br><span class="line">    <span class="comment"># int&lt;1&gt; 加密随机数长度，若不支持CLIENT_PLUGIN_AUTH则为00</span></span><br><span class="line">    auth_plugin_data_len = packet[index:index + <span class="number">2</span>]</span><br><span class="line">    index += <span class="number">2</span></span><br><span class="line">    <span class="comment"># string&lt;10&gt; 保留位，都是00</span></span><br><span class="line">    reserved = packet[index:index + <span class="number">20</span>]</span><br><span class="line">    index += <span class="number">20</span></span><br><span class="line">    <span class="comment"># string&lt;13&gt; 密码加密后13位</span></span><br><span class="line">    auth_plugin_data_part_2 = packet[index:index + <span class="number">26</span>]</span><br><span class="line">    index += <span class="number">26</span></span><br><span class="line">    <span class="comment"># 已NULL结尾的字符串，用户认证方式名称</span></span><br><span class="line">    auth_plugin_name = packet[index:]</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> &#123;</span><br><span class="line">        <span class="string">"payload_length"</span>: payload_length,</span><br><span class="line">        <span class="string">"sequence_id"</span>: sequence_id,</span><br><span class="line">        <span class="string">"protocol_version"</span>: protocol_version,</span><br><span class="line">        <span class="string">"server_version"</span>: server_version,</span><br><span class="line">        <span class="string">"thread_id"</span>: thread_id,</span><br><span class="line">        <span class="string">"auth_plugin_data_part_1"</span>: auth_plugin_data_part_1,</span><br><span class="line">        <span class="string">"filter"</span>: filter_part,</span><br><span class="line">        <span class="string">"capability_flags_1"</span>: capability_flags_1,</span><br><span class="line">        <span class="string">"character_set"</span>: character_set,</span><br><span class="line">        <span class="string">"status_flags"</span>: status_flags,</span><br><span class="line">        <span class="string">"capability_flags_2"</span>: capability_flags_2,</span><br><span class="line">        <span class="string">"auth_plugin_data_len"</span>: auth_plugin_data_len,</span><br><span class="line">        <span class="string">"reserved"</span>: reserved,</span><br><span class="line">        <span class="string">"auth_plugin_data_part_2"</span>: auth_plugin_data_part_2,</span><br><span class="line">        <span class="string">"auth_plugin_name"</span>: auth_plugin_name</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure></p>
+<p><strong>Handshake Resp Packet</strong></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">## Protocol::HandshakeResponse41 当Server的CapabilityFlags不支持CLIENT_PROTOCOL_41，则协议版本为HandshakeReponse320。</span></span><br><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">send_handshake_resp_packet</span><span class="params">(s, initial_resp)</span>:</span></span><br><span class="line">    <span class="string">"""</span></span><br><span class="line"><span class="string">    Client发送相应包</span></span><br><span class="line"><span class="string">    :param s:</span></span><br><span class="line"><span class="string">    :param initial_resp:</span></span><br><span class="line"><span class="string">    :return:</span></span><br><span class="line"><span class="string">    4              capability flags, CLIENT_PROTOCOL_41 always set</span></span><br><span class="line"><span class="string">    4              max-packet size</span></span><br><span class="line"><span class="string">    1              character set</span></span><br><span class="line"><span class="string">    string[23]     reserved (all [0])</span></span><br><span class="line"><span class="string">    string[NUL]    username</span></span><br><span class="line"><span class="string">      if capabilities &amp; CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA &#123;</span></span><br><span class="line"><span class="string">    lenenc-int     length of auth-response</span></span><br><span class="line"><span class="string">    string[n]      auth-response</span></span><br><span class="line"><span class="string">      &#125; else if capabilities &amp; CLIENT_SECURE_CONNECTION &#123;</span></span><br><span class="line"><span class="string">    1              length of auth-response</span></span><br><span class="line"><span class="string">    string[n]      auth-response</span></span><br><span class="line"><span class="string">      &#125; else &#123;</span></span><br><span class="line"><span class="string">    string[NUL]    auth-response</span></span><br><span class="line"><span class="string">      &#125;</span></span><br><span class="line"><span class="string">      if capabilities &amp; CLIENT_CONNECT_WITH_DB &#123;</span></span><br><span class="line"><span class="string">    string[NUL]    database</span></span><br><span class="line"><span class="string">      &#125;</span></span><br><span class="line"><span class="string">      if capabilities &amp; CLIENT_PLUGIN_AUTH &#123;</span></span><br><span class="line"><span class="string">    string[NUL]    auth plugin name</span></span><br><span class="line"><span class="string">      &#125;</span></span><br><span class="line"><span class="string">      if capabilities &amp; CLIENT_CONNECT_ATTRS &#123;</span></span><br><span class="line"><span class="string">    lenenc-int     length of all key-values</span></span><br><span class="line"><span class="string">    lenenc-str     key</span></span><br><span class="line"><span class="string">    lenenc-str     value</span></span><br><span class="line"><span class="string">       if-more data in 'length of all key-values', more keys and value pairs</span></span><br><span class="line"><span class="string">      &#125;</span></span><br><span class="line"><span class="string">    """</span></span><br><span class="line">    client_long_password = <span class="number">1</span></span><br><span class="line">    client_long_flag = <span class="number">4</span></span><br><span class="line">    client_connect_with_db = <span class="number">8</span></span><br><span class="line">    client_protocol_41 = <span class="number">512</span></span><br><span class="line">    client_interactive = <span class="number">1024</span></span><br><span class="line">    client_transactions = <span class="number">8192</span></span><br><span class="line">    client_secure_connection = <span class="number">32768</span></span><br><span class="line">    client_multi_statements = <span class="number">1</span> &lt;&lt; <span class="number">16</span></span><br><span class="line">    client_plugin_auth = <span class="number">1</span> &lt;&lt; <span class="number">19</span></span><br><span class="line"></span><br><span class="line">    client_flag = (client_long_password | client_long_flag | client_connect_with_db | client_protocol_41 |</span><br><span class="line">                   client_interactive | client_transactions | client_secure_connection | client_multi_statements |</span><br><span class="line">                   client_plugin_auth).to_bytes(length=<span class="number">4</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    max_packet_size = <span class="string">b'\x00\xff\xff\xff'</span></span><br><span class="line">    character_set = <span class="string">b'\x21'</span></span><br><span class="line">    filter_part = <span class="string">b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'</span></span><br><span class="line">    user_name = <span class="string">'canal'</span>.encode(<span class="string">'utf-8'</span>) + <span class="string">b'\x00'</span></span><br><span class="line">    password = <span class="string">'canal'</span>.encode(<span class="string">'utf-8'</span>)</span><br><span class="line">    auth_response = encrypt_password(</span><br><span class="line">        password,</span><br><span class="line">        initial_resp.get(<span class="string">'auth_plugin_data_part_1'</span>),</span><br><span class="line">        initial_resp.get(<span class="string">'auth_plugin_data_part_2'</span>)</span><br><span class="line">    )</span><br><span class="line">    auth_response_length = len(auth_response).to_bytes(length=<span class="number">1</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    database = <span class="string">'learning2'</span>.encode(<span class="string">'utf-8'</span>) + <span class="string">b'\x00'</span></span><br><span class="line">    auth_plugin_name = <span class="string">'mysql_native_password'</span>.encode(<span class="string">'utf-8'</span>) + <span class="string">b'\x00'</span></span><br><span class="line">    payload = client_flag + max_packet_size + character_set + filter_part + user_name \</span><br><span class="line">              + auth_response_length + auth_response + database + auth_plugin_name</span><br><span class="line">    header_length = len(payload).to_bytes(length=<span class="number">3</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    sequence_id = <span class="string">b'\x01'</span></span><br><span class="line">    packet = header_length + sequence_id + payload</span><br><span class="line">    s.send(packet)</span><br></pre></td></tr></table></figure>
+<p><strong>注意密码加密方式：auth_plugin_name为mysql_native_password，其密码加密方式为：SHA1(pwd) XOR SHA1(20 byte scramble concat SHA1(SHA1(pwd)))</strong></p>
+<h4 id="命令行阶段"><a href="#命令行阶段" class="headerlink" title="命令行阶段"></a>命令行阶段</h4><p>当我们在连接阶段接收到Mysql Server推送的OK_Parcket说明已经认证成功，之后Mysql将进入命令行阶段，此时我们就可以像Mysql发送命令如<strong>COM_REGISTER_SLAVE</strong>、<strong>COM_BINLOG_DUMP</strong>实现Slave节点注册以及向Mysql Server发送Binlog Dump命令。</p>
+<h5 id="实现代码-1"><a href="#实现代码-1" class="headerlink" title="实现代码"></a>实现代码</h5><p><strong>发送注册Slave Command</strong><br><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">send_com_register_slave</span><span class="params">(s)</span>:</span></span><br><span class="line">    <span class="string">"""</span></span><br><span class="line"><span class="string">    发送命令注册从节点</span></span><br><span class="line"><span class="string">    :param s:</span></span><br><span class="line"><span class="string">    :return:</span></span><br><span class="line"><span class="string">    1              [15] COM_REGISTER_SLAVE</span></span><br><span class="line"><span class="string">    4              server-id</span></span><br><span class="line"><span class="string">    1              slaves hostname length</span></span><br><span class="line"><span class="string">    string[$len]   slaves hostname</span></span><br><span class="line"><span class="string">    1              slaves user len</span></span><br><span class="line"><span class="string">    string[$len]   slaves user</span></span><br><span class="line"><span class="string">    1              slaves password len</span></span><br><span class="line"><span class="string">    string[$len]   slaves password</span></span><br><span class="line"><span class="string">    2              slaves mysql-port</span></span><br><span class="line"><span class="string">    4              replication rank</span></span><br><span class="line"><span class="string">    4              master-id</span></span><br><span class="line"><span class="string">    """</span></span><br><span class="line">    (localhost, local_port) = s.getsockname()</span><br><span class="line">    command = <span class="string">b'\x15'</span></span><br><span class="line">    server_id = (<span class="number">3</span>).to_bytes(length=<span class="number">4</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    hostname = localhost.encode(<span class="string">'utf-8'</span>)</span><br><span class="line">    hostname_length = len(localhost.encode(<span class="string">'utf-8'</span>)).to_bytes(length=<span class="number">1</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    slave_user = <span class="string">'canal'</span>.encode(<span class="string">'utf-8'</span>)</span><br><span class="line">    slave_user_length = len(slave_user).to_bytes(length=<span class="number">1</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    slave_password = <span class="string">'canal'</span>.encode(<span class="string">'utf-8'</span>)</span><br><span class="line">    slave_password_length = len(slave_password).to_bytes(length=<span class="number">1</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    slave_mysql_port = local_port.to_bytes(length=<span class="number">2</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    replication_rank = (<span class="number">0</span>).to_bytes(length=<span class="number">4</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    master_id = (<span class="number">0</span>).to_bytes(length=<span class="number">4</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    payload = command + server_id + hostname_length + hostname + slave_user_length + slave_user + \</span><br><span class="line">              slave_password_length + slave_password + slave_mysql_port + replication_rank + master_id</span><br><span class="line">    header = len(payload).to_bytes(length=<span class="number">3</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    sequence_id = <span class="string">b'\x00'</span></span><br><span class="line">    packet = header + sequence_id + payload</span><br><span class="line">    s.send(packet)</span><br></pre></td></tr></table></figure></p>
+<p><strong>发送Binlog Dump Command</strong><br><figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">def</span> <span class="title">send_com_binlog_dump</span><span class="params">(s)</span>:</span></span><br><span class="line">    <span class="string">"""</span></span><br><span class="line"><span class="string">    发送dump日志的命令</span></span><br><span class="line"><span class="string">    :param s:</span></span><br><span class="line"><span class="string">    :return:</span></span><br><span class="line"><span class="string">    1              [12] COM_BINLOG_DUMP</span></span><br><span class="line"><span class="string">    4              binlog-pos</span></span><br><span class="line"><span class="string">    2              flags</span></span><br><span class="line"><span class="string">    4              server-id</span></span><br><span class="line"><span class="string">    string[EOF]    binlog-filename</span></span><br><span class="line"><span class="string">    """</span></span><br><span class="line">    command = <span class="string">b'\x12'</span></span><br><span class="line">    binlog_pos = (<span class="number">100</span>).to_bytes(length=<span class="number">4</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    flags = <span class="string">b'\x00\x00'</span></span><br><span class="line">    server_id = (<span class="number">3</span>).to_bytes(length=<span class="number">4</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    binlog_filename = <span class="string">'binlog.000502'</span>.encode(<span class="string">'utf-8'</span>)</span><br><span class="line">    payload = command + binlog_pos + flags + server_id + binlog_filename</span><br><span class="line">    header = len(payload).to_bytes(length=<span class="number">3</span>, byteorder=<span class="string">'little'</span>)</span><br><span class="line">    sequence_id = <span class="string">b'\x00'</span></span><br><span class="line">    packet = header + sequence_id + payload</span><br><span class="line">    s.send(packet)</span><br></pre></td></tr></table></figure></p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>我们通过了解Mysql的生命周期知道当我们连接成功后将进入命令行阶段，官方叫Command Phase。此时我们就可以向Mysql Server发送命令实现Slave的伪装。以上代码仅仅只是展示了如何实现Slave节点的注册和发送Binlog Dump指令，对Canal完整流程感兴趣的同学建议去阅读源码，毕竟一个好的组件设计需要考虑IO性能优化（诸如零拷贝、NIO等）、代码的可扩展性等等。</p>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/Mysql/">Mysql</a> <a class="tag tag--primary tag--small t-link" href="/tags/Python/">Python</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/01/29/K8s笔记-集群部署/"
+                    data-tooltip="K8s笔记--集群部署"
+                    aria-label="下一篇: K8s笔记--集群部署"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/01/30/模拟Slave节点接收Binlog/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/01/30/模拟Slave节点接收Binlog/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/01/30/模拟Slave节点接收Binlog/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2024 晨晨晨晨晨晨🐼. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/01/29/K8s笔记-集群部署/"
+                    data-tooltip="K8s笔记--集群部署"
+                    aria-label="下一篇: K8s笔记--集群部署"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/01/30/模拟Slave节点接收Binlog/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/01/30/模拟Slave节点接收Binlog/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/01/30/模拟Slave节点接收Binlog/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/01/30/模拟Slave节点接收Binlog/"
+                        aria-label="分享到 Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>分享到 Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/01/30/模拟Slave节点接收Binlog/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/01/30/模拟Slave节点接收Binlog/"
+                        aria-label="分享到 Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>分享到 Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">晨晨晨晨晨晨🐼</h4>
+        
+            <div id="about-card-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Java开发者、PHP开发者、DevOps爱好者</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                HangZhou，China
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('/assets/images/cover2.jpg');"></div>
+        <!--SCRIPTS-->
+<script src="/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>
