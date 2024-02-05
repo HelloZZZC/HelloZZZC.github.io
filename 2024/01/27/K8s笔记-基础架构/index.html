@@ -13,7 +13,7 @@
     
     
     
-    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg"},"articleBody":"前言K8s目前也是比较主流的一套分布式容器编排工具，因此有着很好的社区，网络上与其相关的技术文章也是数不胜数，该篇文章只是之前学习K8s的笔记搬运。我一直觉得学习一个组件最好的方式还是先了解他的组成架构，然后才会尝试去搭建运行。因此在开始搭建K8s集群前还是应当先对其基础架构中的模块有所了解，该篇文章主要梳理K8s集群部署时我们需要运行的模块（或者说我们在搭集群实质上是在运行哪些模块）。以下是K8s的架构图（截取至K8s官方网站）。\nK8s架构模块Master节点\n\n\n名称\n作用\n\n\n\n\nControllerManager\n负责管理集群各种资源，如Deployment、DaemonSet、Namespace等等\n\n\nKube-apiserver\n提供HTTP/HTTPS的RESTFUL接口，CLI工具以及管理端UI界面都通过其管理资源\n\n\netcd\n储存配置信息以及各种资源的状态信息\n\n\nScheduler\n决定POD最终在哪个Node上运行，这将涉及到调度策略\n\n\nKubelet\n根据配置信息创建Pod并运行容器以及上报容器运行的状态\n\n\n\nNode节点\n\n\n名称\n作用\n\n\n\n\nKube-proxy\nTCP/UDP流转发，是Service组件的实现，当有多个副本时能实现负载均衡，通过Service暴露的端口以及Selector选择器找到一组Pod实现负载均衡\n\n\nKubelet\n根据配置信息创建Pod并运行容器以及上报容器运行的状态\n\n\n\n例子通过以下几组截图看下K8s集群在运行的各个模块。\n","dateCreated":"2024-01-27T21:24:35+08:00","dateModified":"2024-01-29T15:43:26+08:00","datePublished":"2024-01-27T21:24:35+08:00","description":"前言K8s目前也是比较主流的一套分布式容器编排工具，因此有着很好的社区，网络上与其相关的技术文章也是数不胜数，该篇文章只是之前学习K8s的笔记搬运。我一直觉得学习一个组件最好的方式还是先了解他的组成架构，然后才会尝试去搭建运行。因此在开始搭建K8s集群前还是应当先对其基础架构中的模块有所了解，该篇文章主要梳理K8s集群部署时我们需要运行的模块（或者说我们在搭集群实质上是在运行哪些模块）。以下是K8s的架构图（截取至K8s官方网站）。","headline":"K8s笔记--基础架构","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2024/01/27/K8s笔记-基础架构/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg","logo":{"@type":"ImageObject","url":"avatar.jpg"}},"url":"http://hellozzzc.github.io/2024/01/27/K8s笔记-基础架构/","keywords":"K8s"}</script>
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"http://43.142.18.107/assets/images/avatar.jpg"},"articleBody":"前言K8s目前也是比较主流的一套分布式容器编排工具，因此有着很好的社区，网络上与其相关的技术文章也是数不胜数，该篇文章只是之前学习K8s的笔记搬运。我一直觉得学习一个组件最好的方式还是先了解他的组成架构，然后才会尝试去搭建运行。因此在开始搭建K8s集群前还是应当先对其基础架构中的模块有所了解，该篇文章主要梳理K8s集群部署时我们需要运行的模块（或者说我们在搭集群实质上是在运行哪些模块）。以下是K8s的架构图（截取至K8s官方网站）。\nK8s架构模块Master节点\n\n\n名称\n作用\n\n\n\n\nControllerManager\n负责管理集群各种资源，如Deployment、DaemonSet、Namespace等等\n\n\nKube-apiserver\n提供HTTP/HTTPS的RESTFUL接口，CLI工具以及管理端UI界面都通过其管理资源\n\n\netcd\n储存配置信息以及各种资源的状态信息\n\n\nScheduler\n决定POD最终在哪个Node上运行，这将涉及到调度策略\n\n\nKubelet\n根据配置信息创建Pod并运行容器以及上报容器运行的状态\n\n\n\nNode节点\n\n\n名称\n作用\n\n\n\n\nKube-proxy\nTCP/UDP流转发，是Service组件的实现，当有多个副本时能实现负载均衡，通过Service暴露的端口以及Selector选择器找到一组Pod实现负载均衡\n\n\nKubelet\n根据配置信息创建Pod并运行容器以及上报容器运行的状态\n\n\n\n例子通过以下几组截图看下K8s集群在运行的各个模块。\n","dateCreated":"2024-01-27T21:24:35+08:00","dateModified":"2024-02-05T22:01:54+08:00","datePublished":"2024-01-27T21:24:35+08:00","description":"前言K8s目前也是比较主流的一套分布式容器编排工具，因此有着很好的社区，网络上与其相关的技术文章也是数不胜数，该篇文章只是之前学习K8s的笔记搬运。我一直觉得学习一个组件最好的方式还是先了解他的组成架构，然后才会尝试去搭建运行。因此在开始搭建K8s集群前还是应当先对其基础架构中的模块有所了解，该篇文章主要梳理K8s集群部署时我们需要运行的模块（或者说我们在搭集群实质上是在运行哪些模块）。以下是K8s的架构图（截取至K8s官方网站）。","headline":"K8s笔记--基础架构","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2024/01/27/K8s笔记-基础架构/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"http://43.142.18.107/assets/images/avatar.jpg","logo":{"@type":"ImageObject","url":"http://43.142.18.107/assets/images/avatar.jpg"}},"url":"http://hellozzzc.github.io/2024/01/27/K8s笔记-基础架构/","keywords":"K8s"}</script>
     <meta name="description" content="前言K8s目前也是比较主流的一套分布式容器编排工具，因此有着很好的社区，网络上与其相关的技术文章也是数不胜数，该篇文章只是之前学习K8s的笔记搬运。我一直觉得学习一个组件最好的方式还是先了解他的组成架构，然后才会尝试去搭建运行。因此在开始搭建K8s集群前还是应当先对其基础架构中的模块有所了解，该篇文章主要梳理K8s集群部署时我们需要运行的模块（或者说我们在搭集群实质上是在运行哪些模块）。以下是K8">
 <meta name="keywords" content="K8s">
 <meta property="og:type" content="blog">
@@ -22,20 +22,20 @@
 <meta property="og:site_name" content="晨晨晨晨晨晨🐼&#39;s blog">
 <meta property="og:description" content="前言K8s目前也是比较主流的一套分布式容器编排工具，因此有着很好的社区，网络上与其相关的技术文章也是数不胜数，该篇文章只是之前学习K8s的笔记搬运。我一直觉得学习一个组件最好的方式还是先了解他的组成架构，然后才会尝试去搭建运行。因此在开始搭建K8s集群前还是应当先对其基础架构中的模块有所了解，该篇文章主要梳理K8s集群部署时我们需要运行的模块（或者说我们在搭集群实质上是在运行哪些模块）。以下是K8">
 <meta property="og:locale" content="zh-cn">
-<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/k8s_structure.png">
-<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/k8s_running_module.png">
-<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/k8s_kubelet.png">
-<meta property="og:updated_time" content="2024-01-29T07:43:26.219Z">
+<meta property="og:image" content="http://43.142.18.107/assets/images/posts/k8s_structure.png">
+<meta property="og:image" content="http://43.142.18.107/assets/images/posts/k8s_running_module.png">
+<meta property="og:image" content="http://43.142.18.107/assets/images/posts/k8s_kubelet.png">
+<meta property="og:updated_time" content="2024-02-05T14:01:54.801Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="K8s笔记--基础架构">
 <meta name="twitter:description" content="前言K8s目前也是比较主流的一套分布式容器编排工具，因此有着很好的社区，网络上与其相关的技术文章也是数不胜数，该篇文章只是之前学习K8s的笔记搬运。我一直觉得学习一个组件最好的方式还是先了解他的组成架构，然后才会尝试去搭建运行。因此在开始搭建K8s集群前还是应当先对其基础架构中的模块有所了解，该篇文章主要梳理K8s集群部署时我们需要运行的模块（或者说我们在搭集群实质上是在运行哪些模块）。以下是K8">
-<meta name="twitter:image" content="http://hellozzzc.github.io/assets/images/posts/k8s_structure.png">
+<meta name="twitter:image" content="http://43.142.18.107/assets/images/posts/k8s_structure.png">
     
     
         
     
     
-        <meta property="og:image" content="http://hellozzzc.github.io/assets/images/avatar.jpg"/>
+        <meta property="og:image" content="http://43.142.18.107/assets/images/avatar.jpg"/>
     
     
     
@@ -83,7 +83,7 @@
             >
         
         
-            <img class="header-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+            <img class="header-picture" src="http://43.142.18.107/assets/images/avatar.jpg" alt="作者的图片"/>
         
         </a>
     
@@ -104,7 +104,7 @@
                     href="/#about"
                     aria-label="阅读有关作者的更多信息"
                 >
-                    <img class="sidebar-profile-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+                    <img class="sidebar-profile-picture" src="http://43.142.18.107/assets/images/avatar.jpg" alt="作者的图片"/>
                 </a>
                 <h4 class="sidebar-profile-name">晨晨晨晨晨晨🐼</h4>
                 
@@ -262,7 +262,7 @@
     
     <div class="post-content markdown">
         <div class="main-content-wrap">
-            <h3 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h3><p>K8s目前也是比较主流的一套分布式容器编排工具，因此有着很好的社区，网络上与其相关的技术文章也是数不胜数，该篇文章只是之前学习K8s的笔记搬运。我一直觉得学习一个组件最好的方式还是先了解他的组成架构，然后才会尝试去搭建运行。因此在开始搭建K8s集群前还是应当先对其基础架构中的模块有所了解，该篇文章主要梳理K8s集群部署时我们需要运行的模块（或者说我们在搭集群实质上是在运行哪些模块）。以下是K8s的架构图（截取至K8s官方网站）。<br><img src="/assets/images/posts/k8s_structure.png" alt="k8s-structure"><br><a id="more"></a></p>
+            <h3 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h3><p>K8s目前也是比较主流的一套分布式容器编排工具，因此有着很好的社区，网络上与其相关的技术文章也是数不胜数，该篇文章只是之前学习K8s的笔记搬运。我一直觉得学习一个组件最好的方式还是先了解他的组成架构，然后才会尝试去搭建运行。因此在开始搭建K8s集群前还是应当先对其基础架构中的模块有所了解，该篇文章主要梳理K8s集群部署时我们需要运行的模块（或者说我们在搭集群实质上是在运行哪些模块）。以下是K8s的架构图（截取至K8s官方网站）。<br><img src="http://43.142.18.107/assets/images/posts/k8s_structure.png" alt="k8s-structure"><br><a id="more"></a></p>
 <h3 id="K8s架构模块"><a href="#K8s架构模块" class="headerlink" title="K8s架构模块"></a>K8s架构模块</h3><h4 id="Master节点"><a href="#Master节点" class="headerlink" title="Master节点"></a>Master节点</h4><table>
 <thead>
 <tr>
@@ -311,7 +311,7 @@
 </tr>
 </tbody>
 </table>
-<h3 id="例子"><a href="#例子" class="headerlink" title="例子"></a>例子</h3><p>通过以下几组截图看下K8s集群在运行的各个模块。<br><img src="/assets/images/posts/k8s_running_module.png" alt="k8s-running-module"><br><img src="/assets/images/posts/k8s_kubelet.png" alt="k8s-kubelet"></p>
+<h3 id="例子"><a href="#例子" class="headerlink" title="例子"></a>例子</h3><p>通过以下几组截图看下K8s集群在运行的各个模块。<br><img src="http://43.142.18.107/assets/images/posts/k8s_running_module.png" alt="k8s-running-module"><br><img src="http://43.142.18.107/assets/images/posts/k8s_kubelet.png" alt="k8s-kubelet"></p>
 
             
 
@@ -604,7 +604,7 @@
             <i class="fa fa-times"></i>
         </div>
         
-            <img id="about-card-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+            <img id="about-card-picture" src="http://43.142.18.107/assets/images/avatar.jpg" alt="作者的图片"/>
         
             <h4 id="about-card-name">晨晨晨晨晨晨🐼</h4>
         
@@ -631,9 +631,11 @@
 
         
         
-<div id="cover" style="background-image:url('/assets/images/cover2.jpg');"></div>
+<div id="cover" style="background-image:url('http://43.142.18.107/assets/images/cover2.jpg');"></div>
         <!--SCRIPTS-->
-<script src="/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+
+    <script src="http://43.142.18.107/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+
 <!--SCRIPTS END-->
 
 

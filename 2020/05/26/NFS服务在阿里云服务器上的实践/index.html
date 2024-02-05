@@ -13,7 +13,7 @@
     
     
     
-    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg"},"articleBody":"为什么要搭建NFS服务在分布式服务中，我们的应用可能是集群部署的拥有ServerA、ServerB甚至ServerC。当用户访问一个图片时，他可能通过Load Balance访问到ServerA，但是如果这张图片不在ServerA上而在ServerB上的话不就报错了吗（404 Not Found）？这时你肯定想安静的敲代码不想被产品经理或者你的上司烦恼，这时聪明的程序员就知道该马上想解决方案了。我一开始的想法是保持Server A和Server B的文件保持一个增量同步（我只有2台服务器）然后我就通过Sersync+rsync实现了我的想法（Sersync+rsync的部署可能会开篇文章来说），但是这样一来2边的服务器都保存了图片万一哪天服务挂了我却不知道怎么办，还要对比一下差异保证两边同步想想都头疼，所以最后我又搭了一个NFS服务（Network File System）下面就讲一下部署的流程。当然，肯定也有人会问直接把图片统一存云上就好啦，话是这么说，但是我们有些业务是需要操作本地的图片，比如调用些gd库之类的。\nNFS底层的原理这边就稍微带一下好了，主要还是建议去看看鸟哥的linux私房菜里面会比较详细，NFS底层还是通过RPC实现的，NFS守护进程在启动时会到RPC注册对应功能的端口号，RPC通过暴露111端口给客户端，当客户端需要使用服务时会先像RPC进行索要NFS的端口号，拿到端口号之后在跟NFS的守护进程进行交互，比如分析客户端的权限等等。\nNFS服务部署下面用2台服务器做演示分别用ServerA和ClientB来表示，当然也可以用Ubantu会稍微有点不同，因为本人就是一开始在Ubantu上部署的，发现有些目录跟centos的略有不同。\nServer A1234567891011# 下载依赖，这一步ServerA和ClientB都是一样的sudo yum install rpcbindsudo yum install nfs-utils# 启动服务systemctl start rpcbindsystemctl start nfs-server# 设置开机自启动systemctl enable rpcbind systemctl enable nfs-server\n这时候就可以通过rpcinfo -p来看当前rpc服务注册的端口了，你会发现除了rpc本身（111）的端口，还有NFS本身（2049）的端口，还有好几个其他NFS服务的功能性端口，更优秀的是这几个端口还是随机生成（这阿里云还要配安全组的不是玩完了）。为了解决这个问题nfs也提供了一个方案处理这个问题，那就是到/etc/sysconfig下的nfs文件进行配置，这边我是参考网上大部分的配置1234RQUOTAD_PORT=30001LOCKD_TCPPORT=30002LOCKD_UDPPORT=30002MOUNTD_PORT=30003\n每一行都分别对应TCP和UDP的端口号，这里Ubantu稍微不同，我的Ubantu系统下并没有这个文件需要到另一个文件里配置具体文件名暂时记不起来了（这个等我后续填坑）。修改完后重启nfs，之后在看rpcinfo -p就发现端口号全部固定了，这样以来阿里云安全组就好配多了。以上就是配置，现在我们要暴露我们的路径给我们的客户端，需要到/etc下新建一个exports，按照自己的情况配置具体参数还是看鸟哥的私房菜，改完之后需要重新挂载执行命令exportfs -arv，成功后通过showmount -e就可以看到我们的挂载目录了。\nClient B123456789安装的步骤同ServerA这里我们讲一下挂载的命令# 查看ServerA挂载出来的目录showmount -e your_host# 创建挂载的本地目录mkdir dir# 挂载目录mount -t nfs your_host:/dir dir\n补充一下日志在/var/log/message中查看，根据不同日志信息分析具体的失败原因。\n结语以上是NFS部署的相关步骤，如果有些不足作者会在后续补上，也欢迎大家提出错误的地方和不足。作者邮箱:zc19940702@gmail.com\n","dateCreated":"2020-05-26T21:42:43+08:00","dateModified":"2024-01-29T11:21:39+08:00","datePublished":"2020-05-26T21:42:43+08:00","description":"为什么要搭建NFS服务在分布式服务中，我们的应用可能是集群部署的拥有ServerA、ServerB甚至ServerC。当用户访问一个图片时，他可能通过Load Balance访问到ServerA，但是如果这张图片不在ServerA上而在ServerB上的话不就报错了吗（404 Not Found）？这时你肯定想安静的敲代码不想被产品经理或者你的上司烦恼，这时聪明的程序员就知道该马上想解决方案了。我一开始的想法是保持Server A和Server B的文件保持一个增量同步（我只有2台服务器）然后我就通过Sersync+rsync实现了我的想法（Sersync+rsync的部署可能会开篇文章来说），但是这样一来2边的服务器都保存了图片万一哪天服务挂了我却不知道怎么办，还要对比一下差异保证两边同步想想都头疼，所以最后我又搭了一个NFS服务（Network File System）下面就讲一下部署的流程。当然，肯定也有人会问直接把图片统一存云上就好啦，话是这么说，但是我们有些业务是需要操作本地的图片，比如调用些gd库之类的。","headline":"NFS服务在阿里云服务器上的实践","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2020/05/26/NFS服务在阿里云服务器上的实践/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"avatar.jpg","logo":{"@type":"ImageObject","url":"avatar.jpg"}},"url":"http://hellozzzc.github.io/2020/05/26/NFS服务在阿里云服务器上的实践/","keywords":"Linux"}</script>
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"http://43.142.18.107/assets/images/avatar.jpg"},"articleBody":"为什么要搭建NFS服务在分布式服务中，我们的应用可能是集群部署的拥有ServerA、ServerB甚至ServerC。当用户访问一个图片时，他可能通过Load Balance访问到ServerA，但是如果这张图片不在ServerA上而在ServerB上的话不就报错了吗（404 Not Found）？这时你肯定想安静的敲代码不想被产品经理或者你的上司烦恼，这时聪明的程序员就知道该马上想解决方案了。我一开始的想法是保持Server A和Server B的文件保持一个增量同步（我只有2台服务器）然后我就通过Sersync+rsync实现了我的想法（Sersync+rsync的部署可能会开篇文章来说），但是这样一来2边的服务器都保存了图片万一哪天服务挂了我却不知道怎么办，还要对比一下差异保证两边同步想想都头疼，所以最后我又搭了一个NFS服务（Network File System）下面就讲一下部署的流程。当然，肯定也有人会问直接把图片统一存云上就好啦，话是这么说，但是我们有些业务是需要操作本地的图片，比如调用些gd库之类的。\nNFS底层的原理这边就稍微带一下好了，主要还是建议去看看鸟哥的linux私房菜里面会比较详细，NFS底层还是通过RPC实现的，NFS守护进程在启动时会到RPC注册对应功能的端口号，RPC通过暴露111端口给客户端，当客户端需要使用服务时会先像RPC进行索要NFS的端口号，拿到端口号之后在跟NFS的守护进程进行交互，比如分析客户端的权限等等。\nNFS服务部署下面用2台服务器做演示分别用ServerA和ClientB来表示，当然也可以用Ubantu会稍微有点不同，因为本人就是一开始在Ubantu上部署的，发现有些目录跟centos的略有不同。\nServer A1234567891011# 下载依赖，这一步ServerA和ClientB都是一样的sudo yum install rpcbindsudo yum install nfs-utils# 启动服务systemctl start rpcbindsystemctl start nfs-server# 设置开机自启动systemctl enable rpcbind systemctl enable nfs-server\n这时候就可以通过rpcinfo -p来看当前rpc服务注册的端口了，你会发现除了rpc本身（111）的端口，还有NFS本身（2049）的端口，还有好几个其他NFS服务的功能性端口，更优秀的是这几个端口还是随机生成（这阿里云还要配安全组的不是玩完了）。为了解决这个问题nfs也提供了一个方案处理这个问题，那就是到/etc/sysconfig下的nfs文件进行配置，这边我是参考网上大部分的配置1234RQUOTAD_PORT=30001LOCKD_TCPPORT=30002LOCKD_UDPPORT=30002MOUNTD_PORT=30003\n每一行都分别对应TCP和UDP的端口号，这里Ubantu稍微不同，我的Ubantu系统下并没有这个文件需要到另一个文件里配置具体文件名暂时记不起来了（这个等我后续填坑）。修改完后重启nfs，之后在看rpcinfo -p就发现端口号全部固定了，这样以来阿里云安全组就好配多了。以上就是配置，现在我们要暴露我们的路径给我们的客户端，需要到/etc下新建一个exports，按照自己的情况配置具体参数还是看鸟哥的私房菜，改完之后需要重新挂载执行命令exportfs -arv，成功后通过showmount -e就可以看到我们的挂载目录了。\nClient B123456789安装的步骤同ServerA这里我们讲一下挂载的命令# 查看ServerA挂载出来的目录showmount -e your_host# 创建挂载的本地目录mkdir dir# 挂载目录mount -t nfs your_host:/dir dir\n补充一下日志在/var/log/message中查看，根据不同日志信息分析具体的失败原因。\n结语以上是NFS部署的相关步骤，如果有些不足作者会在后续补上，也欢迎大家提出错误的地方和不足。作者邮箱:zc19940702@gmail.com\n","dateCreated":"2020-05-26T21:42:43+08:00","dateModified":"2024-01-29T11:21:39+08:00","datePublished":"2020-05-26T21:42:43+08:00","description":"为什么要搭建NFS服务在分布式服务中，我们的应用可能是集群部署的拥有ServerA、ServerB甚至ServerC。当用户访问一个图片时，他可能通过Load Balance访问到ServerA，但是如果这张图片不在ServerA上而在ServerB上的话不就报错了吗（404 Not Found）？这时你肯定想安静的敲代码不想被产品经理或者你的上司烦恼，这时聪明的程序员就知道该马上想解决方案了。我一开始的想法是保持Server A和Server B的文件保持一个增量同步（我只有2台服务器）然后我就通过Sersync+rsync实现了我的想法（Sersync+rsync的部署可能会开篇文章来说），但是这样一来2边的服务器都保存了图片万一哪天服务挂了我却不知道怎么办，还要对比一下差异保证两边同步想想都头疼，所以最后我又搭了一个NFS服务（Network File System）下面就讲一下部署的流程。当然，肯定也有人会问直接把图片统一存云上就好啦，话是这么说，但是我们有些业务是需要操作本地的图片，比如调用些gd库之类的。","headline":"NFS服务在阿里云服务器上的实践","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2020/05/26/NFS服务在阿里云服务器上的实践/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"http://43.142.18.107/assets/images/avatar.jpg","logo":{"@type":"ImageObject","url":"http://43.142.18.107/assets/images/avatar.jpg"}},"url":"http://hellozzzc.github.io/2020/05/26/NFS服务在阿里云服务器上的实践/","keywords":"Linux"}</script>
     <meta name="description" content="为什么要搭建NFS服务在分布式服务中，我们的应用可能是集群部署的拥有ServerA、ServerB甚至ServerC。当用户访问一个图片时，他可能通过Load Balance访问到ServerA，但是如果这张图片不在ServerA上而在ServerB上的话不就报错了吗（404 Not Found）？这时你肯定想安静的敲代码不想被产品经理或者你的上司烦恼，这时聪明的程序员就知道该马上想解决方案了。我">
 <meta name="keywords" content="Linux">
 <meta property="og:type" content="blog">
@@ -31,7 +31,7 @@
         
     
     
-        <meta property="og:image" content="http://hellozzzc.github.io/assets/images/avatar.jpg"/>
+        <meta property="og:image" content="http://43.142.18.107/assets/images/avatar.jpg"/>
     
     
     
@@ -79,7 +79,7 @@
             >
         
         
-            <img class="header-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+            <img class="header-picture" src="http://43.142.18.107/assets/images/avatar.jpg" alt="作者的图片"/>
         
         </a>
     
@@ -100,7 +100,7 @@
                     href="/#about"
                     aria-label="阅读有关作者的更多信息"
                 >
-                    <img class="sidebar-profile-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+                    <img class="sidebar-profile-picture" src="http://43.142.18.107/assets/images/avatar.jpg" alt="作者的图片"/>
                 </a>
                 <h4 class="sidebar-profile-name">晨晨晨晨晨晨🐼</h4>
                 
@@ -559,7 +559,7 @@
             <i class="fa fa-times"></i>
         </div>
         
-            <img id="about-card-picture" src="/assets/images/avatar.jpg" alt="作者的图片"/>
+            <img id="about-card-picture" src="http://43.142.18.107/assets/images/avatar.jpg" alt="作者的图片"/>
         
             <h4 id="about-card-name">晨晨晨晨晨晨🐼</h4>
         
@@ -586,9 +586,11 @@
 
         
         
-<div id="cover" style="background-image:url('/assets/images/cover2.jpg');"></div>
+<div id="cover" style="background-image:url('http://43.142.18.107/assets/images/cover2.jpg');"></div>
         <!--SCRIPTS-->
-<script src="/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+
+    <script src="http://43.142.18.107/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+
 <!--SCRIPTS END-->
 
 
