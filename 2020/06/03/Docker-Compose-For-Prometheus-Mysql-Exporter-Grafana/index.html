@@ -13,7 +13,7 @@
     
     
     
-    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"http://43.142.18.107/assets/images/avatar.jpg"},"articleBody":"前言前言先听我唠个嗑，为什么要搭建这套监控体系呢，因为公司的服务器目前部署在阿里云服务器上，ECS虽然有CPU监控、带宽的监控但是对涉及到应用的Mysql、nginx、Api并没有监控，所以才打算搭建这套监控体系。如果问为什么不把数据库放在阿里云的RDS上，这里说明下原因，因为阿里云RDS目前不支持Myisam的引擎，但是我们业务中又用到所以没办法。\n配置以下是该组合的docker-composer.yml的配置，因为prometheus也是第一次玩，里面的一些报警规则还不是很了解，所以就简单的贴一个该组合下的prometheus.yml。\ndocker-compose123456789101112131415161718192021222324252627282930313233343536version: &apos;3&apos;services:    prometheus:        image: prom/prometheus:latest        volumes:            - /YOUR_YAML_DIR/prometheus.yml:/etc/prometheus/prometheus.yml            - /etc/localtime:/etc/localtime:ro        networks:            - &quot;net&quot;        depends_on:            - mysql        links:            - mysql:mysql    grafana:        image: grafana/grafana:7.0.1-ubuntu        volumes:            - /etc/localtime:/etc/localtime:ro        ports:            - &quot;3000:3000&quot;        networks:            - &quot;net&quot;        depends_on:            - prometheus        links:            - prometheus:prometheus    mysql:        image: prom/mysqld-exporter:latest        volumes:            - /etc/localtime:/etc/localtime:ro        environment:            DATA_SOURCE_NAME: &quot;DB_USER:DB_PASSWORD@(DB_HOST:DB_PORT)/&quot;        networks:            - &quot;prometheus&quot;networks:    net:        external: true\nprometheus.yml123456789101112global:  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.scrape_configs:  - job_name: &apos;prometheus&apos;    static_configs:    - targets: [&apos;localhost:9090&apos;]  - job_name: &apos;mysql&apos;    static_configs:    - targets: [&apos;mysql:9104&apos;]\n","dateCreated":"2020-06-03T20:31:59+08:00","dateModified":"2024-01-29T11:22:06+08:00","datePublished":"2020-06-03T20:31:59+08:00","description":"前言前言先听我唠个嗑，为什么要搭建这套监控体系呢，因为公司的服务器目前部署在阿里云服务器上，ECS虽然有CPU监控、带宽的监控但是对涉及到应用的Mysql、nginx、Api并没有监控，所以才打算搭建这套监控体系。如果问为什么不把数据库放在阿里云的RDS上，这里说明下原因，因为阿里云RDS目前不支持Myisam的引擎，但是我们业务中又用到所以没办法。\n配置以下是该组合的docker-composer.yml的配置，因为prometheus也是第一次玩，里面的一些报警规则还不是很了解，所以就简单的贴一个该组合下的prometheus.yml。","headline":"Docker Compose For Prometheus+Mysql_Exporter+Grafana","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2020/06/03/Docker-Compose-For-Prometheus-Mysql-Exporter-Grafana/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"http://43.142.18.107/assets/images/avatar.jpg","logo":{"@type":"ImageObject","url":"http://43.142.18.107/assets/images/avatar.jpg"}},"url":"http://hellozzzc.github.io/2020/06/03/Docker-Compose-For-Prometheus-Mysql-Exporter-Grafana/","keywords":"Docker"}</script>
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg"},"articleBody":"前言前言先听我唠个嗑，为什么要搭建这套监控体系呢，因为公司的服务器目前部署在阿里云服务器上，ECS虽然有CPU监控、带宽的监控但是对涉及到应用的Mysql、nginx、Api并没有监控，所以才打算搭建这套监控体系。如果问为什么不把数据库放在阿里云的RDS上，这里说明下原因，因为阿里云RDS目前不支持Myisam的引擎，但是我们业务中又用到所以没办法。\n配置以下是该组合的docker-composer.yml的配置，因为prometheus也是第一次玩，里面的一些报警规则还不是很了解，所以就简单的贴一个该组合下的prometheus.yml。\ndocker-compose123456789101112131415161718192021222324252627282930313233343536version: &apos;3&apos;services:    prometheus:        image: prom/prometheus:latest        volumes:            - /YOUR_YAML_DIR/prometheus.yml:/etc/prometheus/prometheus.yml            - /etc/localtime:/etc/localtime:ro        networks:            - &quot;net&quot;        depends_on:            - mysql        links:            - mysql:mysql    grafana:        image: grafana/grafana:7.0.1-ubuntu        volumes:            - /etc/localtime:/etc/localtime:ro        ports:            - &quot;3000:3000&quot;        networks:            - &quot;net&quot;        depends_on:            - prometheus        links:            - prometheus:prometheus    mysql:        image: prom/mysqld-exporter:latest        volumes:            - /etc/localtime:/etc/localtime:ro        environment:            DATA_SOURCE_NAME: &quot;DB_USER:DB_PASSWORD@(DB_HOST:DB_PORT)/&quot;        networks:            - &quot;prometheus&quot;networks:    net:        external: true\nprometheus.yml123456789101112global:  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.scrape_configs:  - job_name: &apos;prometheus&apos;    static_configs:    - targets: [&apos;localhost:9090&apos;]  - job_name: &apos;mysql&apos;    static_configs:    - targets: [&apos;mysql:9104&apos;]\n","dateCreated":"2020-06-03T20:31:59+08:00","dateModified":"2024-01-29T11:22:06+08:00","datePublished":"2020-06-03T20:31:59+08:00","description":"前言前言先听我唠个嗑，为什么要搭建这套监控体系呢，因为公司的服务器目前部署在阿里云服务器上，ECS虽然有CPU监控、带宽的监控但是对涉及到应用的Mysql、nginx、Api并没有监控，所以才打算搭建这套监控体系。如果问为什么不把数据库放在阿里云的RDS上，这里说明下原因，因为阿里云RDS目前不支持Myisam的引擎，但是我们业务中又用到所以没办法。\n配置以下是该组合的docker-composer.yml的配置，因为prometheus也是第一次玩，里面的一些报警规则还不是很了解，所以就简单的贴一个该组合下的prometheus.yml。","headline":"Docker Compose For Prometheus+Mysql_Exporter+Grafana","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2020/06/03/Docker-Compose-For-Prometheus-Mysql-Exporter-Grafana/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg","logo":{"@type":"ImageObject","url":"https://zc940702.top/assets/images/avatar.jpg"}},"url":"http://hellozzzc.github.io/2020/06/03/Docker-Compose-For-Prometheus-Mysql-Exporter-Grafana/","keywords":"Docker"}</script>
     <meta name="description" content="前言前言先听我唠个嗑，为什么要搭建这套监控体系呢，因为公司的服务器目前部署在阿里云服务器上，ECS虽然有CPU监控、带宽的监控但是对涉及到应用的Mysql、nginx、Api并没有监控，所以才打算搭建这套监控体系。如果问为什么不把数据库放在阿里云的RDS上，这里说明下原因，因为阿里云RDS目前不支持Myisam的引擎，但是我们业务中又用到所以没办法。 配置以下是该组合的docker-compose">
 <meta name="keywords" content="Docker">
 <meta property="og:type" content="blog">
@@ -31,7 +31,7 @@
         
     
     
-        <meta property="og:image" content="http://43.142.18.107/assets/images/avatar.jpg"/>
+        <meta property="og:image" content="https://zc940702.top/assets/images/avatar.jpg"/>
     
     
     
@@ -79,7 +79,7 @@
             >
         
         
-            <img class="header-picture" src="http://43.142.18.107/assets/images/avatar.jpg" alt="作者的图片"/>
+            <img class="header-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
         
         </a>
     
@@ -100,7 +100,7 @@
                     href="/#about"
                     aria-label="阅读有关作者的更多信息"
                 >
-                    <img class="sidebar-profile-picture" src="http://43.142.18.107/assets/images/avatar.jpg" alt="作者的图片"/>
+                    <img class="sidebar-profile-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
                 </a>
                 <h4 class="sidebar-profile-name">晨晨晨晨晨晨🐼</h4>
                 
@@ -554,7 +554,7 @@
             <i class="fa fa-times"></i>
         </div>
         
-            <img id="about-card-picture" src="http://43.142.18.107/assets/images/avatar.jpg" alt="作者的图片"/>
+            <img id="about-card-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
         
             <h4 id="about-card-name">晨晨晨晨晨晨🐼</h4>
         
@@ -581,7 +581,7 @@
 
         
         
-<div id="cover" style="background-image:url('http://43.142.18.107/assets/images/cover2.jpg');"></div>
+<div id="cover" style="background-image:url('https://zc940702.top/assets/images/cover2.jpg');"></div>
         <!--SCRIPTS-->
 
     <script src="http://43.142.18.107/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
