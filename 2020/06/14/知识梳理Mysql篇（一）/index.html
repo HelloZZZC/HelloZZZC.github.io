@@ -13,7 +13,7 @@
     
     
     
-    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg"},"articleBody":"Mysql数据库结构体系如图所示\n分析器对sql语句做词法分析以及语法分析，比如是select、update或者是insert，然后在到具体操作的表和字段，判断表是否存在、字段是否存在、语法是否正确。\n优化器对sql语句做优化，决定是使用哪个所以，决定join的顺序\n执行器执行sql语句时判断对当前表是否有操作的权限，如果没有就会返回权限错误，如果有就打开表进行执行。\n存储引擎mysql的存储引擎有很多，但是比较常见的有Innodb、Myisam、Memory，但是除此之外还有NDB、Archive、Maria、Federated\nInnodb主要面向OLTP（在线事务处理）的应用，通过多版本并发控制（MVVC）实现高并发性，支持事务（默认的事务隔离级别为repeatTable）、行锁。通过next-key-locking的策略避免幻读的产生。通过二次写、插入缓冲、自适应哈希索引、预读提高性能和可用性。\nMyisamMyisam由MYD和MYI组成，不支持事务、不支持行锁、支持表锁、支持全文索引主要面向OLAP（在线分析处理）的应用。Myisam只缓存索引文件，不缓存数据文件。\nMemory将表中的数据存放在内存中，如果服务器宕机或者重启数据将会丢失，不适合做数据的持久化存储，更适合用作临时数据存储，默认使用哈希索引，支持B树索引。虽然存储引擎很快，但是使用中依然存在限制。\n\n只支持表锁，并发性差\n不支持TEXT和BLOB的数据类型\n存储变长字段时是按照定长字段的方式存储所以会有空间浪费的问题\n\nNDB集群索引引擎，数据全部存放在内存中，因此通过主键查找的速度很快并且能通过增加集群中的节点提升性能，但是NDB在Join的操作上是在mysql数据层面上处理，所以越复杂的连接操作会有比较大的网络开销\nArchiveArchive只支持select和insert，mysql版本在5.1之后支持索引，使用场景上一般为存储归档的数据，因为其会将行数据通过zlib算法进行压缩，因此数据占用的空间会比较少，但该引擎非事务安全的存储引擎，仅提供快速插入和压缩的功能\nMaria是为了取代Myisam而开发的存储引擎，支持缓存数据和索引文件，支持行锁，支持MVVC，支持事务和非安全事务的选择，以及更好的BLOB字符类型的处理性能\n对比表格各存储引擎对比如下，如果有问题请指出。\n\n\n\n功能\nMyisam\nMemory\nInnoDB\nArchive\nNDB\n\n\n\n\n支持事务\nN\nN\nY\nN\nN\n\n\n锁类型\n表锁\n表锁\n行锁\n行锁\n行锁\n\n\nMVVC\nN\nN\nY\nY\nY\n\n\nB树索引\nY\nY\nY\nN\nY\n\n\nHash索引\nN\nY\nY\nN\nY\n\n\n全文索引\nY\nN\nN\nN\nN\n\n\n聚簇索引\nN\nN\nY\nN\nN\n\n\n数据缓存\nN\nY\nY\nN\nY\n\n\n索引缓存\nY\nY\nY\nN\nY\n\n\n数据压缩\nY\nN\nN\nY\nN\n\n\n存储成本（应该是硬盘空间）\n低\nN/A\n高\n非常低\n低\n\n\n内存成本\n低\n中等\n高\n低\n高\n\n\n批量插入速度\n高\n高\n慢\n非常高\n高\n\n\n\n","dateCreated":"2020-06-14T10:36:40+08:00","dateModified":"2024-02-05T20:48:08+08:00","datePublished":"2020-06-14T10:36:40+08:00","description":"Mysql数据库结构体系如图所示","headline":"知识梳理Mysql篇（一）","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg","logo":{"@type":"ImageObject","url":"https://zc940702.top/assets/images/avatar.jpg"}},"url":"http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/","keywords":"Mysql"}</script>
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg"},"articleBody":"Mysql数据库结构体系如图所示\n分析器对sql语句做词法分析以及语法分析，比如是select、update或者是insert，然后在到具体操作的表和字段，判断表是否存在、字段是否存在、语法是否正确。\n优化器对sql语句做优化，决定是使用哪个所以，决定join的顺序\n执行器执行sql语句时判断对当前表是否有操作的权限，如果没有就会返回权限错误，如果有就打开表进行执行。\n存储引擎mysql的存储引擎有很多，但是比较常见的有Innodb、Myisam、Memory，但是除此之外还有NDB、Archive、Maria、Federated\nInnodb主要面向OLTP（在线事务处理）的应用，通过多版本并发控制（MVVC）实现高并发性，支持事务（默认的事务隔离级别为repeatTable）、行锁。通过next-key-locking的策略避免幻读的产生。通过二次写、插入缓冲、自适应哈希索引、预读提高性能和可用性。\nMyisamMyisam由MYD和MYI组成，不支持事务、不支持行锁、支持表锁、支持全文索引主要面向OLAP（在线分析处理）的应用。Myisam只缓存索引文件，不缓存数据文件。\nMemory将表中的数据存放在内存中，如果服务器宕机或者重启数据将会丢失，不适合做数据的持久化存储，更适合用作临时数据存储，默认使用哈希索引，支持B树索引。虽然存储引擎很快，但是使用中依然存在限制。\n\n只支持表锁，并发性差\n不支持TEXT和BLOB的数据类型\n存储变长字段时是按照定长字段的方式存储所以会有空间浪费的问题\n\nNDB集群索引引擎，数据全部存放在内存中，因此通过主键查找的速度很快并且能通过增加集群中的节点提升性能，但是NDB在Join的操作上是在mysql数据层面上处理，所以越复杂的连接操作会有比较大的网络开销\nArchiveArchive只支持select和insert，mysql版本在5.1之后支持索引，使用场景上一般为存储归档的数据，因为其会将行数据通过zlib算法进行压缩，因此数据占用的空间会比较少，但该引擎非事务安全的存储引擎，仅提供快速插入和压缩的功能\nMaria是为了取代Myisam而开发的存储引擎，支持缓存数据和索引文件，支持行锁，支持MVVC，支持事务和非安全事务的选择，以及更好的BLOB字符类型的处理性能\n对比表格各存储引擎对比如下，如果有问题请指出。\n\n\n\n功能\nMyisam\nMemory\nInnoDB\nArchive\nNDB\n\n\n\n\n支持事务\nN\nN\nY\nN\nN\n\n\n锁类型\n表锁\n表锁\n行锁\n行锁\n行锁\n\n\nMVVC\nN\nN\nY\nY\nY\n\n\nB树索引\nY\nY\nY\nN\nY\n\n\nHash索引\nN\nY\nY\nN\nY\n\n\n全文索引\nY\nN\nN\nN\nN\n\n\n聚簇索引\nN\nN\nY\nN\nN\n\n\n数据缓存\nN\nY\nY\nN\nY\n\n\n索引缓存\nY\nY\nY\nN\nY\n\n\n数据压缩\nY\nN\nN\nY\nN\n\n\n存储成本（应该是硬盘空间）\n低\nN/A\n高\n非常低\n低\n\n\n内存成本\n低\n中等\n高\n低\n高\n\n\n批量插入速度\n高\n高\n慢\n非常高\n高\n\n\n\n","dateCreated":"2020-06-14T10:36:40+08:00","dateModified":"2024-02-06T09:21:57+08:00","datePublished":"2020-06-14T10:36:40+08:00","description":"Mysql数据库结构体系如图所示","headline":"知识梳理Mysql篇（一）","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg","logo":{"@type":"ImageObject","url":"https://zc940702.top/assets/images/avatar.jpg"}},"url":"http://hellozzzc.github.io/2020/06/14/知识梳理Mysql篇（一）/","keywords":"Mysql"}</script>
     <meta name="description" content="Mysql数据库结构体系如图所示">
 <meta name="keywords" content="Mysql">
 <meta property="og:type" content="blog">
@@ -22,12 +22,12 @@
 <meta property="og:site_name" content="晨晨晨晨晨晨🐼&#39;s blog">
 <meta property="og:description" content="Mysql数据库结构体系如图所示">
 <meta property="og:locale" content="zh-cn">
-<meta property="og:image" content="http://43.142.18.107/assets/images/posts/mysql_structure.png">
-<meta property="og:updated_time" content="2024-02-05T12:48:08.477Z">
+<meta property="og:image" content="https://zc940702.top/assets/images/posts/mysql_structure.png">
+<meta property="og:updated_time" content="2024-02-06T01:21:57.543Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="知识梳理Mysql篇（一）">
 <meta name="twitter:description" content="Mysql数据库结构体系如图所示">
-<meta name="twitter:image" content="http://43.142.18.107/assets/images/posts/mysql_structure.png">
+<meta name="twitter:image" content="https://zc940702.top/assets/images/posts/mysql_structure.png">
     
     
         
@@ -260,7 +260,7 @@
     
     <div class="post-content markdown">
         <div class="main-content-wrap">
-            <h3 id="Mysql数据库结构体系"><a href="#Mysql数据库结构体系" class="headerlink" title="Mysql数据库结构体系"></a>Mysql数据库结构体系</h3><p>如图所示<br><img src="http://43.142.18.107/assets/images/posts/mysql_structure.png" alt="mysql-server-struct"><br><a id="more"></a></p>
+            <h3 id="Mysql数据库结构体系"><a href="#Mysql数据库结构体系" class="headerlink" title="Mysql数据库结构体系"></a>Mysql数据库结构体系</h3><p>如图所示<br><img src="https://zc940702.top/assets/images/posts/mysql_structure.png" alt="mysql-server-struct"><br><a id="more"></a></p>
 <h4 id="分析器"><a href="#分析器" class="headerlink" title="分析器"></a>分析器</h4><p>对sql语句做词法分析以及语法分析，比如是select、update或者是insert，然后在到具体操作的表和字段，判断表是否存在、字段是否存在、语法是否正确。</p>
 <h4 id="优化器"><a href="#优化器" class="headerlink" title="优化器"></a>优化器</h4><p>对sql语句做优化，决定是使用哪个所以，决定join的顺序</p>
 <h4 id="执行器"><a href="#执行器" class="headerlink" title="执行器"></a>执行器</h4><p>执行sql语句时判断对当前表是否有操作的权限，如果没有就会返回权限错误，如果有就打开表进行执行。</p>
@@ -717,7 +717,7 @@
 <div id="cover" style="background-image:url('https://zc940702.top/assets/images/cover2.jpg');"></div>
         <!--SCRIPTS-->
 
-    <script src="http://43.142.18.107/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+    <script src="https://zc940702.top/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
 
 <!--SCRIPTS END-->
 
