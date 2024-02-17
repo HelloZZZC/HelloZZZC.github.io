@@ -1,0 +1,669 @@
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="晨晨晨晨晨晨🐼&#39;s blog">
+    <title>从JVM内存模型到JVM问题排查(二) - 晨晨晨晨晨晨🐼&#39;s blog</title>
+    <meta name="author" content="晨晨晨晨晨晨🐼">
+    
+        <meta name="keywords" content="Java,PHP,DevOps,">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg"},"articleBody":"垃圾收集算法分代收集理论当前虚拟机的垃圾收集都采用分代收集算法，这种算法没有什么新的思想，只是根据对象存活周期的不同将内存分为几块。一般将java堆分为新生代和老年代，这样我们就可以根据各个年代的特点选择合适的垃圾收集算法。\n标记复制算法为了解决效率问题，“复制”收集算法出现了。它可以将内存分为大小相同的两块，每次使用其中的一块。当这一块的内存使用完后，就将还存活的对象复制到另一块去，然后再把使用的空间一次清理掉。这样就使每次的内存回收都是对内存区间的一半进行回收。可以联想到Survivor区的结构，当触发minorgc时将S0或者S1中存活的对象复制到另一块去。该算法目前使用在新生代的垃圾回收，因为需要空出一半的内存，因此不适合用在老年代的垃圾回收（G1、ZGC这些除外）。\n标记清除算法算法分为“标记”和“清除”阶段：标记存活的对象，统一回收所有未被标记的对象(一般选择这种)；也可以反过来，标记出所有需要回收的对象，在标记完成后统一回收所有被标记的对象。\n存在的问题\n效率问题（如果需要标记的对象太多，效率不高\n空间问题（标记清除后会产生大量不连续的碎片）\n\n标记整理算法根据老年代的特点特出的一种标记算法，标记过程仍然与“标记-清除”算法一样，但后续步骤不是直接对可回收对象回收，而是让所有存活的对象向一端移动，然后直接清理掉端边界以外的内存。\n垃圾收集器\nSerial收集器Serial（串行）收集器是最基本、历史最悠久的垃圾收集器了。大家看名字就知道这个收集器是一个单线程收集器了。它的“单线程”的意义不仅仅意味着它只会使用一条垃圾收集线程去完成垃圾收集工作，更重要的是它在进行垃圾收集工作的时候必须暂停其他所有的工作线程（STW），直到它收集结束。新生代采用复制算法，老年代采用标记-整理算法。\n参数1-XX:+UseSerialGC -XX:+UseSerialOldGC\n工作流程图\nParallel Scavenge收集器Parallel收集器其实就是Serial收集器的多线程版本，除了使用多线程进行垃圾收集外，其余行为（控制参数、收集算法、回收策略等等）和Serial收集器类似。默认的收集线程数跟cpu核数相同，当然也可以用参数(-XX:ParallelGCThreads)指定收集线程数，但是一般不推荐修改。新生代采用复制算法，老年代采用标记-整理算法。\n参数1-XX:+UseParallelGC -XX:+UseParallelOldGC\n工作流程图\nParNew收集器ParNew收集器跟Parallel收集器类似，唯一的区别就是它能和CMS收集器配合使用。\n参数1-XX:+UseParNewGC\n工作流程图\nCMS收集器CMS收集器更注重用户体验，旨在让STW的时间最短，因此它的工作流程是应用程序线程和GC线程基本上并行工作。CMS采用的算法是标记清除，并且是用在老年代垃圾回收的收集器。\n参数1-XX:+UseConcMarkSweepGC(old)\n工作流程图\n\n初始标记：会STW，但是只标记GC Roots直接引用的对象，因此速度非常快。\n并发标记：不会STW，并发标记阶段就是从GC Roots的直接关联对象开始遍历整个对象图的过程， 这个过程耗时较长但是不需要停顿用户线程， 可以与垃圾收集线程一起并发运行。因为用户程序继续运行，可能会有导致已经标记过的对象状态发生改变。\n重新标记：会STW，重新标记阶段就是为了修正并发标记期间因为用户程序继续运行而导致标记产生变动的那一部分对象的标记记录，这个阶段的停顿时间一般会比初始标记阶段的时间稍长，远远比并发标记阶段时间短。主要用到三色标记里的增量更新算法做重新标记。\n并发清理：不会STW，开启用户线程，同时GC线程开始对未标记的区域做清扫。这个阶段如果有新增对象会被标记为黑色不做任何处理。\n并发重置：不会STW，重置本次GC过程中的标记数据。\n\n注意事项\n执行过程中的不确定性，会存在上一次垃圾回收还没执行完，然后垃圾回收又被触发的情况，特别是在并发标记和并发清理阶段会出现，一边回收，系统一边运行，也许没回收完就再次触发full gc，也就是”concurrentmode failure”，此时会进入stop the world，用serial old垃圾收集器来回收（STW并且使用单线程回收）。\n使用的回收算法-“标记-清除”算法会导致收集结束时会有大量空间碎片产生，当然通过参数-XX:+UseCMSCompactAtFullCollection可以让jvm在执行完标记清除后再做整理\nCMS垃圾收集器有可能会产生浮动垃圾，这些浮动垃圾只能等下一次GC回收\n-XX:CMSInitiatingOccupancyFraction: 当老年代使用达到该比例时会触发FullGC（默认是92，这是百分比），这么做的目的是由于整个过程会产生浮动垃圾，此时又要满足用户线程所需的空间，所以当空间到达92%就触发FullGC，避免发生”concurrentmode failure”，导致STW并且使用单线程回收垃圾。\n\n核心参数图\n解决并发标记的策略写屏障 + 增量更新\nG1主要针对配备多颗处理器及大容量内存的机器. 以极高概率满足GC停顿时间要求的同时,还具备高吞吐量性能特征。\n特性G1将Java堆划分为多个大小相等的独立区域（Region），JVM最多可以有2048个Region。一般Region大小等于堆大小除以2048，比如堆大小为4096M，则Region大小为2M，当然也可以用参数”-XX:G1HeapRegionSize“手动指定Region大小，但是推荐默认的计算方式。G1保留了年轻代和老年代的概念，但不再是物理隔阂了，它们都是（可以不连续）Region的集合。默认年轻代对堆内存的占比是5%，如果堆大小为4096M，那么年轻代占据200MB左右的内存，对应大概是100个Region，可以通过“-XX:G1NewSizePercent”设置新生代初始占比，在系统运行中，JVM会不停的给年轻代增加更多的Region，但是最多新生代的占比不会超过60%，可以通过“-XX:G1MaxNewSizePercent”调整。年轻代中的Eden和Survivor对应的region也跟之前一样，默认8:1:1，假设年轻代现在有1000个region，eden区对应800个，s0对应100个，s1对应100个。一个Region可能之前是年轻代，如果Region进行了垃圾回收，之后可能又会变成老年代，也就是说Region的区域功能可能会动态变化。G1垃圾收集器对于对象什么时候会转移到老年代跟之前讲过的原则一样，唯一不同的是对大对象的处理，G1有专门分配大对象的Region叫Humongous区，而不是让大对象直接进入老年代的Region中。在G1中，大对象的判定规则就是一个大对象超过了一个Region大小的50%，比如按照上面算的，每个Region是2M，只要一个大对象超过了1M，就会被放入Humongous中，而且一个大对象如果太大，可能会横跨多个Region来存放。Humongous区专门存放短期巨型对象，不用直接进老年代，可以节约老年代的空间，避免因为老年代空间不够的GC开销。Full GC的时候除了收集年轻代和老年代之外，也会将Humongous区一并回收。\n参数1-XX:+UseG1GC\n工作流程图\n\n初始标记：会STW，暂停所有的其他线程，并记录下gc roots直接能引用的对象，速度很快。\n并发标记：不会STW，同CMS的并发标记。\n最终标记：会STW，同CMS的重新标记。\n筛选回收：会STW，筛选回收阶段首先对各个Region的回收价值和成本进行排序，根据用户所期望的GC停顿时间(可以用JVM参数-XX:MaxGCPauseMillis指定)来制定回收计划，比如说老年代此时有1000个Region都满了，但是因为根据预期停顿时间，本次垃圾回收可能只能停顿200毫秒，那么通过之前回收成本计算得知，可能回收其中800个Region刚好需要200ms，那么就只会回收800个Region(Collection Set，要回收的集合)，尽量把GC导致的停顿时间控制在我们指定的范围内。这个阶段其实也可以做到与用户程序一起并发执行，但是因为只回收一部分Region，时间是用户可控制的，而且停顿用户线程将大幅提高收集效率。不管是年轻代或是老年代，回收算法主要用的是复制算法，将一个region中的存活对象复制到另一个region中，这种不会像CMS那样回收完因为有很多内存碎片还需要整理一次，G1采用复制算法回收几乎不会有太多内存碎片。\n\nG1垃圾收集分类Young GCYoungGC并不是说现有的Eden区放满了就会马上触发，G1会计算下现在Eden区回收大概要多久时间，如果回收时间远远小于参数-XX:MaxGCPauseMills设定的值，那么增加年轻代的region，继续给新对象存放，不会马上做YoungGC，直到下一次Eden区放满，G1计算回收时间接近参数 -XX:MaxGCPauseMills设定的值，那么就会触发Young GC。\nMixed GC不是FullGC，老年代的堆占有率达到参数(-XX:InitiatingHeapOccupancyPercent)设定的值则触发，回收所有的Young和部分Old(根据期望的GC停顿时间确定old区垃圾收集的优先顺序)以及大对象区，正常情况G1的垃圾收集是先做MixedGC，主要使用复制算法，需要把各个region中存活的对象拷贝到别的region里去，拷贝过程中如果发现没有足够的空region能够承载拷贝对象就会触发一次Full GC。\nFull GC停止系统程序，然后采用单线程进行标记、清理和压缩整理，好空闲出来一批Region来供下一次MixedGC使用，这个过程是非常耗时的。(Shenandoah优化成多线程收集了)。\n三色标记算法把Gc Roots可达性分析遍历对象过程中遇到的对象， 按照“是否访问过”这个条件标记成以下三种颜色:\n\n黑色：把Gcroots可达性分析遍历对象过程中遇到的对象， 按照“是否访问过”这个条件标记成以下三种颜色表示对象已经被垃圾收集器访问过， 且这个对象的所有引用都已经扫描过。 黑色的对象代表已经扫描过， 它是安全存活的， 如果有其他对象引用指向了黑色对象， 无须重新扫描一遍。 黑色对象不可能直接（不经过灰色对象） 指向某个白色对象。\n灰色：表示对象已经被垃圾收集器访问过， 但这个对象上至少存在一个引用还没有被扫描过。\n白色：表示对象尚未被垃圾收集器访问过。 显然在可达性分析刚刚开始的阶段， 所有的对象都是白色的， 若\n\n在分析结束的阶段， 仍然是白色的对象， 即代表不可达。\n多标在并发标记过程中，如果由于方法运行结束导致部分局部变量(gcroot)被销毁，这个gcroot引用的对象之前又被扫描过(被标记为非垃圾对象)，那么本轮GC不会回收这部分内存。这部分本应该回收但是没有回收到的内存，被称之为“浮动垃圾”。浮动垃圾并不会影响垃圾回收的正确性，只是需要等到下一轮垃圾回收中才被清除。另外，针对并发标记(还有并发清理)开始后产生的新对象，通常的做法是直接全部当成黑色，本轮不会进行清除。这部分对象期间可能也会变为垃圾，这也算是浮动垃圾的一部分。\n漏标在标记过程中原本应该标记为黑色的对象，被遗漏导致对象被回收，这将会导致比较严重的BUG。\n解决方法\n增量更新（Incremental Update）：当黑色对象插入新的指向白色对象的引用关系时， 就将这个新插入的引用记录下来， 等并发扫描结束之后，再将这些记录过的引用关系中的黑色对象为根，重新扫描一次。 这可以简化理解为，黑色对象一旦新插入了指向白色对象的引用之后，它就变回灰色对象了。重新扫描的时候将这些引用重新扫描一遍。\n\n原始快照（Snapshot At The Beginning，SATB）：当灰色对象要删除指向白色对象的引用关系时， 就将这个要删除的引用记录下来， 在并发扫描结束之后，再将这些记录过的引用关系中的灰色对象为根，重新扫描一次，这样就能扫描到白色的对象，将白色对象直接标记为黑色(目的就是让这种对象在本轮gc清理中能存活下来，待下一轮gc的时候重新扫描，这个对象也有可能是浮动垃圾)以上无论是对引用关系记录的插入还是删除， 虚拟机的记录操作都是通过写屏障实现的。重新扫码的时候将对象D直接标记为黑色，那么对象D就能在本轮GC中存活下来，但是对象D也有可能是浮动垃圾。\n\n\n","dateCreated":"2024-02-11T15:49:47+08:00","dateModified":"2024-02-17T11:06:50+08:00","datePublished":"2024-02-11T15:49:47+08:00","description":"垃圾收集算法分代收集理论当前虚拟机的垃圾收集都采用分代收集算法，这种算法没有什么新的思想，只是根据对象存活周期的不同将内存分为几块。一般将java堆分为新生代和老年代，这样我们就可以根据各个年代的特点选择合适的垃圾收集算法。","headline":"从JVM内存模型到JVM问题排查(二)","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2024/02/11/从JVM内存模型到JVM问题排查-二/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg","logo":{"@type":"ImageObject","url":"https://zc940702.top/assets/images/avatar.jpg"}},"url":"http://hellozzzc.github.io/2024/02/11/从JVM内存模型到JVM问题排查-二/","keywords":"Java"}</script>
+    <meta name="description" content="垃圾收集算法分代收集理论当前虚拟机的垃圾收集都采用分代收集算法，这种算法没有什么新的思想，只是根据对象存活周期的不同将内存分为几块。一般将java堆分为新生代和老年代，这样我们就可以根据各个年代的特点选择合适的垃圾收集算法。">
+<meta name="keywords" content="Java">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="从JVM内存模型到JVM问题排查(二)">
+<meta property="og:url" content="http://hellozzzc.github.io/2024/02/11/从JVM内存模型到JVM问题排查-二/index.html">
+<meta property="og:site_name" content="晨晨晨晨晨晨🐼&#39;s blog">
+<meta property="og:description" content="垃圾收集算法分代收集理论当前虚拟机的垃圾收集都采用分代收集算法，这种算法没有什么新的思想，只是根据对象存活周期的不同将内存分为几块。一般将java堆分为新生代和老年代，这样我们就可以根据各个年代的特点选择合适的垃圾收集算法。">
+<meta property="og:locale" content="zh-cn">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/mark_copy.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/mark_clean.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/mark_sort.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/gc.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/gc_serial.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/gc_parallel.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/gc_parnew.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/gc_cms.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/gc_cms_params.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/gc_g1_structure.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/gc_g1.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/bwg_mark.jpeg">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/multiple_mark.jpeg">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/miss_mark.jpeg">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/incremental_update.jpeg">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/satb.jpeg">
+<meta property="og:updated_time" content="2024-02-17T03:06:50.567Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="从JVM内存模型到JVM问题排查(二)">
+<meta name="twitter:description" content="垃圾收集算法分代收集理论当前虚拟机的垃圾收集都采用分代收集算法，这种算法没有什么新的思想，只是根据对象存活周期的不同将内存分为几块。一般将java堆分为新生代和老年代，这样我们就可以根据各个年代的特点选择合适的垃圾收集算法。">
+<meta name="twitter:image" content="http://hellozzzc.github.io/assets/images/posts/mark_copy.png">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="https://zc940702.top/assets/images/avatar.jpg"/>
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/style-p7w8wxcc22z0uoeozhcztvvpgv2umorvyzcejj03qywn9okzjboqr0e7flor.min.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            晨晨晨晨晨晨🐼&#39;s blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">晨晨晨晨晨晨🐼</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="搜索"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">搜索</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/HelloZZZC"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            从JVM内存模型到JVM问题排查(二)
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2024-02-11T15:49:47+08:00">
+	
+		    2024 年 2 月 11 日
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/后端技术/">后端技术</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <h2 id="垃圾收集算法"><a href="#垃圾收集算法" class="headerlink" title="垃圾收集算法"></a>垃圾收集算法</h2><h3 id="分代收集理论"><a href="#分代收集理论" class="headerlink" title="分代收集理论"></a>分代收集理论</h3><p>当前虚拟机的垃圾收集都采用分代收集算法，这种算法没有什么新的思想，只是根据对象存活周期的不同将内存分为几块。一般将java堆分为新生代和老年代，这样我们就可以根据各个年代的特点选择合适的垃圾收集算法。<br><a id="more"></a></p>
+<h3 id="标记复制算法"><a href="#标记复制算法" class="headerlink" title="标记复制算法"></a>标记复制算法</h3><p>为了解决效率问题，“复制”收集算法出现了。它可以将内存分为大小相同的两块，每次使用其中的一块。当这一块的内存使用完后，就将还存活的对象复制到另一块去，然后再把使用的空间一次清理掉。这样就使每次的内存回收都是对内存区间的一半进行回收。可以联想到Survivor区的结构，当触发minorgc时将S0或者S1中存活的对象复制到另一块去。该算法目前使用在新生代的垃圾回收，因为需要空出一半的内存，因此不适合用在老年代的垃圾回收（G1、ZGC这些除外）。<br><img src="/assets/images/posts/mark_copy.png" alt="image.png"></p>
+<h3 id="标记清除算法"><a href="#标记清除算法" class="headerlink" title="标记清除算法"></a>标记清除算法</h3><p>算法分为“标记”和“清除”阶段：标记存活的对象，统一回收所有未被标记的对象(一般选择这种)；也可以反过来，标记出所有需要回收的对象，在标记完成后统一回收所有被标记的对象。<br><img src="/assets/images/posts/mark_clean.png" alt="image.png"></p>
+<h4 id="存在的问题"><a href="#存在的问题" class="headerlink" title="存在的问题"></a>存在的问题</h4><ol>
+<li>效率问题（如果需要标记的对象太多，效率不高</li>
+<li>空间问题（标记清除后会产生大量不连续的碎片）</li>
+</ol>
+<h3 id="标记整理算法"><a href="#标记整理算法" class="headerlink" title="标记整理算法"></a>标记整理算法</h3><p>根据老年代的特点特出的一种标记算法，标记过程仍然与“标记-清除”算法一样，但后续步骤不是直接对可回收对象回收，而是让所有存活的对象向一端移动，然后直接清理掉端边界以外的内存。<br><img src="/assets/images/posts/mark_sort.png" alt="image.png"></p>
+<h2 id="垃圾收集器"><a href="#垃圾收集器" class="headerlink" title="垃圾收集器"></a>垃圾收集器</h2><p><img src="/assets/images/posts/gc.png" alt="image.png"></p>
+<h3 id="Serial收集器"><a href="#Serial收集器" class="headerlink" title="Serial收集器"></a>Serial收集器</h3><p>Serial（串行）收集器是最基本、历史最悠久的垃圾收集器了。大家看名字就知道这个收集器是一个单线程收集器了。它的“单线程”的意义不仅仅意味着它只会使用一条垃圾收集线程去完成垃圾收集工作，更重要的是它在进行垃圾收集工作的时候必须暂停其他所有的工作线程（STW），直到它收集结束。新生代采用复制算法，老年代采用标记-整理算法。</p>
+<h4 id="参数"><a href="#参数" class="headerlink" title="参数"></a>参数</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-XX:+UseSerialGC -XX:+UseSerialOldGC</span><br></pre></td></tr></table></figure>
+<h4 id="工作流程图"><a href="#工作流程图" class="headerlink" title="工作流程图"></a>工作流程图</h4><p><img src="/assets/images/posts/gc_serial.png" alt="image.png"></p>
+<h3 id="Parallel-Scavenge收集器"><a href="#Parallel-Scavenge收集器" class="headerlink" title="Parallel Scavenge收集器"></a>Parallel Scavenge收集器</h3><p>Parallel收集器其实就是Serial收集器的多线程版本，除了使用多线程进行垃圾收集外，其余行为（控制参数、收集算法、回收策略等等）和Serial收集器类似。默认的收集线程数跟cpu核数相同，当然也可以用参数(-XX:ParallelGCThreads)指定收集线程数，但是一般不推荐修改。新生代采用复制算法，老年代采用标记-整理算法。</p>
+<h4 id="参数-1"><a href="#参数-1" class="headerlink" title="参数"></a>参数</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-XX:+UseParallelGC -XX:+UseParallelOldGC</span><br></pre></td></tr></table></figure>
+<h4 id="工作流程图-1"><a href="#工作流程图-1" class="headerlink" title="工作流程图"></a>工作流程图</h4><p><img src="/assets/images/posts/gc_parallel.png" alt="image.png"></p>
+<h3 id="ParNew收集器"><a href="#ParNew收集器" class="headerlink" title="ParNew收集器"></a>ParNew收集器</h3><p>ParNew收集器跟Parallel收集器类似，唯一的区别就是它能和CMS收集器配合使用。</p>
+<h4 id="参数-2"><a href="#参数-2" class="headerlink" title="参数"></a>参数</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-XX:+UseParNewGC</span><br></pre></td></tr></table></figure>
+<h4 id="工作流程图-2"><a href="#工作流程图-2" class="headerlink" title="工作流程图"></a>工作流程图</h4><p><img src="/assets/images/posts/gc_parnew.png" alt="image.png"></p>
+<h3 id="CMS收集器"><a href="#CMS收集器" class="headerlink" title="CMS收集器"></a>CMS收集器</h3><p>CMS收集器更注重用户体验，旨在让STW的时间最短，因此它的工作流程是应用程序线程和GC线程基本上并行工作。CMS采用的算法是标记清除，并且是用在老年代垃圾回收的收集器。</p>
+<h4 id="参数-3"><a href="#参数-3" class="headerlink" title="参数"></a>参数</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-XX:+UseConcMarkSweepGC(old)</span><br></pre></td></tr></table></figure>
+<h4 id="工作流程图-3"><a href="#工作流程图-3" class="headerlink" title="工作流程图"></a>工作流程图</h4><p><img src="/assets/images/posts/gc_cms.png" alt="image.png"></p>
+<ol>
+<li>初始标记：会STW，但是只标记GC Roots直接引用的对象，因此速度非常快。</li>
+<li>并发标记：不会STW，并发标记阶段就是从GC Roots的直接关联对象开始遍历整个对象图的过程， 这个过程耗时较长但是不需要停顿用户线程， 可以与垃圾收集线程一起并发运行。因为用户程序继续运行，可能会有导致已经标记过的对象状态发生改变。</li>
+<li>重新标记：会STW，重新标记阶段就是为了修正并发标记期间因为用户程序继续运行而导致标记产生变动的那一部分对<br>象的标记记录，这个阶段的停顿时间一般会比初始标记阶段的时间稍长，远远比并发标记阶段时间短。主要用到三<br>色标记里的增量更新算法做重新标记。</li>
+<li>并发清理：不会STW，开启用户线程，同时GC线程开始对未标记的区域做清扫。这个阶段如果有新增对象会被标记为黑<br>色不做任何处理。</li>
+<li>并发重置：不会STW，重置本次GC过程中的标记数据。</li>
+</ol>
+<h4 id="注意事项"><a href="#注意事项" class="headerlink" title="注意事项"></a>注意事项</h4><ol>
+<li>执行过程中的不确定性，会存在上一次垃圾回收还没执行完，然后垃圾回收又被触发的情况，特别是在并发标记和并发清理阶段会出现，一边回收，系统一边运行，也许没回收完就再次触发full gc，也就是”concurrentmode failure”，此时会进入stop the world，用serial old垃圾收集器来回收（STW并且使用单线程回收）。</li>
+<li>使用的回收算法-“标记-清除”算法会导致收集结束时会有大量空间碎片产生，当然通过参数<code>-XX:+UseCMSCompactAtFullCollection</code>可以让jvm在执行完标记清除后再做整理</li>
+<li>CMS垃圾收集器有可能会产生浮动垃圾，这些浮动垃圾只能等下一次GC回收</li>
+<li><code>-XX:CMSInitiatingOccupancyFraction</code>: 当老年代使用达到该比例时会触发FullGC（默认是92，这是百分比），这么做的目的是由于整个过程会产生浮动垃圾，此时又要满足用户线程所需的空间，所以当空间到达92%就触发FullGC，避免发生”concurrentmode failure”，导致STW并且使用单线程回收垃圾。</li>
+</ol>
+<h4 id="核心参数图"><a href="#核心参数图" class="headerlink" title="核心参数图"></a>核心参数图</h4><p><img src="/assets/images/posts/gc_cms_params.png" alt="image.png"></p>
+<h4 id="解决并发标记的策略"><a href="#解决并发标记的策略" class="headerlink" title="解决并发标记的策略"></a>解决并发标记的策略</h4><p>写屏障 + 增量更新</p>
+<h3 id="G1"><a href="#G1" class="headerlink" title="G1"></a>G1</h3><p>主要针对配备多颗处理器及大容量内存的机器. 以极高概率满足GC停顿时间要求的同时,还具备高吞吐量性能特征。</p>
+<h4 id="特性"><a href="#特性" class="headerlink" title="特性"></a>特性</h4><p>G1将Java堆划分为多个大小相等的独立区域（Region），JVM最多可以有2048个Region。一般Region大小等于堆大小除以2048，比如堆大小为4096M，则Region大小为2M，当然也可以用参数”<code>-XX:G1HeapRegionSize</code>“手动指定Region大小，但是推荐默认的计算方式。G1保留了年轻代和老年代的概念，但不再是物理隔阂了，它们都是（可以不连续）Region的集合。默认年轻代对堆内存的占比是5%，如果堆大小为4096M，那么年轻代占据200MB左右的内存，对应大概是100个Region，可以通过“-XX:G1NewSizePercent”设置新生代初始占比，在系统运行中，JVM会不停的给年轻代增加更多的Region，但是最多新生代的占比不会超过60%，可以通过“<code>-XX:G1MaxNewSizePercent</code>”调整。年轻代中的Eden和Survivor对应的region也跟之前一样，默认8:1:1，假设年轻代现在有1000个region，eden区对应800个，s0对应100个，s1对应100个。一个Region可能之前是年轻代，如果Region进行了垃圾回收，之后可能又会变成老年代，也就是说Region的区域功能可能会动态变化。G1垃圾收集器对于对象什么时候会转移到老年代跟之前讲过的原则一样，唯一不同的是对大对象的处理，G1有专门分配大对象的Region叫Humongous区，而不是让大对象直接进入老年代的Region中。在G1中，大对象的判定规则就是一个大对象超过了一个Region大小的50%，比如按照上面算的，每个Region是2M，只要一个大对象超过了1M，就会被放入Humongous中，而且一个大对象如果太大，可能会横跨多个Region来存放。Humongous区专门存放短期巨型对象，不用直接进老年代，可以节约老年代的空间，避免因为老年代空间不够的GC开销。Full GC的时候除了收集年轻代和老年代之外，也会将Humongous区一并回收。<br><img src="/assets/images/posts/gc_g1_structure.png" alt="image.png"></p>
+<h4 id="参数-4"><a href="#参数-4" class="headerlink" title="参数"></a>参数</h4><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">-XX:+UseG1GC</span><br></pre></td></tr></table></figure>
+<h4 id="工作流程图-4"><a href="#工作流程图-4" class="headerlink" title="工作流程图"></a>工作流程图</h4><p><img src="/assets/images/posts/gc_g1.png" alt="image.png"></p>
+<ol>
+<li>初始标记：会STW，暂停所有的其他线程，并记录下gc roots直接能引用的对象，速度很快。</li>
+<li>并发标记：不会STW，同CMS的并发标记。</li>
+<li>最终标记：会STW，同CMS的重新标记。</li>
+<li>筛选回收：会STW，筛选回收阶段首先对各个Region的回收价值和成本进行排序，根据用户所期望的GC停顿时间(可以用JVM参数<code>-XX:MaxGCPauseMillis</code>指定)来制定回收计划，比如说老年代此时有1000个Region都满了，但是因为根据预期停顿时间，本次垃圾回收可能只能停顿200毫秒，那么通过之前回收成本计算得知，可能回收其中800个Region刚好需要200ms，那么就只会回收800个Region(Collection Set，要回收的集合)，尽量把GC导致的停顿时间控制在我们指定的范围内。这个阶段其实也可以做到与用户程序一起并发执行，但是因为只回收一部分Region，时间是用户可控制的，而且停顿用户线程将大幅提高收集效率。不管是年轻代或是老年代，回收算法主要用的是复制算法，将一个region中的存活对象复制到另一个region中，这种不会像CMS那样回收完因为有很多内存碎片还需要整理一次，G1采用复制算法回收几乎不会有太多内存碎片。</li>
+</ol>
+<h3 id="G1垃圾收集分类"><a href="#G1垃圾收集分类" class="headerlink" title="G1垃圾收集分类"></a>G1垃圾收集分类</h3><h4 id="Young-GC"><a href="#Young-GC" class="headerlink" title="Young GC"></a>Young GC</h4><p>YoungGC并不是说现有的Eden区放满了就会马上触发，G1会计算下现在Eden区回收大概要多久时间，如果回收时间远远小于参数<code>-XX:MaxGCPauseMills</code>设定的值，那么增加年轻代的region，继续给新对象存放，不会马上做YoungGC，直到下一次Eden区放满，G1计算回收时间接近参数 <code>-XX:MaxGCPauseMills</code>设定的值，那么就会触发Young GC。</p>
+<h4 id="Mixed-GC"><a href="#Mixed-GC" class="headerlink" title="Mixed GC"></a>Mixed GC</h4><p>不是FullGC，老年代的堆占有率达到参数(<code>-XX:InitiatingHeapOccupancyPercent</code>)设定的值则触发，回收所有的Young和部分Old(根据期望的GC停顿时间确定old区垃圾收集的优先顺序)以及大对象区，正常情况G1的垃圾收集是先做MixedGC，主要使用复制算法，需要把各个region中存活的对象拷贝到别的region里去，拷贝过程中如果发现没有足够的空region能够承载拷贝对象就会触发一次Full GC。</p>
+<h4 id="Full-GC"><a href="#Full-GC" class="headerlink" title="Full GC"></a>Full GC</h4><p>停止系统程序，然后采用单线程进行标记、清理和压缩整理，好空闲出来一批Region来供下一次MixedGC使用，这个过程是非常耗时的。(Shenandoah优化成多线程收集了)。</p>
+<h2 id="三色标记算法"><a href="#三色标记算法" class="headerlink" title="三色标记算法"></a>三色标记算法</h2><p>把Gc Roots可达性分析遍历对象过程中遇到的对象， 按照“是否访问过”这个条件标记成以下三种颜色:</p>
+<ol>
+<li>黑色：把Gcroots可达性分析遍历对象过程中遇到的对象， 按照“是否访问过”这个条件标记成以下三种颜色表示对象已经被垃圾收集器访问过， 且这个对象的所有引用都已经扫描过。 黑色的对象代表已经扫描过， 它是安全存活的， 如果有其他对象引用指向了黑色对象， 无须重新扫描一遍。 黑色对象不可能直接（不经过灰色对象） 指向某个白色对象。</li>
+<li>灰色：表示对象已经被垃圾收集器访问过， 但这个对象上至少存在一个引用还没有被扫描过。</li>
+<li>白色：表示对象尚未被垃圾收集器访问过。 显然在可达性分析刚刚开始的阶段， 所有的对象都是白色的， 若</li>
+</ol>
+<p>在分析结束的阶段， 仍然是白色的对象， 即代表不可达。<br><img src="/assets/images/posts/bwg_mark.jpeg" alt="image.jpeg"></p>
+<h3 id="多标"><a href="#多标" class="headerlink" title="多标"></a>多标</h3><p>在并发标记过程中，如果由于方法运行结束导致部分局部变量(gcroot)被销毁，这个gcroot引用的对象之前又被扫描过(被标记为非垃圾对象)，那么本轮GC不会回收这部分内存。这部分本应该回收但是没有回收到的内存，被称之为“浮动垃圾”。浮动垃圾并不会影响垃圾回收的正确性，只是需要等到下一轮垃圾回收中才被清除。另外，针对并发标记(还有并发清理)开始后产生的新对象，通常的做法是直接全部当成黑色，本轮不会进行清除。这部分对象期间可能也会变为垃圾，这也算是浮动垃圾的一部分。<br><img src="/assets/images/posts/multiple_mark.jpeg" alt="image.jpeg"></p>
+<h3 id="漏标"><a href="#漏标" class="headerlink" title="漏标"></a>漏标</h3><p>在标记过程中原本应该标记为黑色的对象，被遗漏导致对象被回收，这将会导致比较严重的BUG。<br><img src="/assets/images/posts/miss_mark.jpeg" alt="image.jpeg"></p>
+<h4 id="解决方法"><a href="#解决方法" class="headerlink" title="解决方法"></a>解决方法</h4><ul>
+<li><p><strong>增量更新（Incremental Update）</strong>：当黑色对象插入新的指向白色对象的引用关系时， 就将这个新插入的引用记录下来， 等并发扫描结束之后，再将这些记录过的引用关系中的黑色对象为根，重新扫描一次。 这可以简化理解为，黑色对象一旦新插入了指向白色对象的引用之后，它就变回灰色对象了。重新扫描的时候将这些引用重新扫描一遍。<br><img src="/assets/images/posts/incremental_update.jpeg" alt="image.jpeg"></p>
+</li>
+<li><p><strong>原始快照（Snapshot At The Beginning，SATB）</strong>：当灰色对象要删除指向白色对象的引用关系时， 就将这个要删除的引用记录下来， 在并发扫描结束之后，再将这些记录过的引用关系中的灰色对象为根，重新扫描一次，这样就能扫描到白色的对象，将白色对象直接标记为黑色(目的就是让这种对象在本轮gc清理中能存活下来，待下一轮gc的时候重新扫描，这个对象也有可能是浮动垃圾)以上无论是对引用关系记录的插入还是删除， 虚拟机的记录操作都是通过写屏障实现的。重新扫码的时候将对象D直接标记为黑色，那么对象D就能在本轮GC中存活下来，但是对象D也有可能是浮动垃圾。<br><img src="/assets/images/posts/satb.jpeg" alt="image.jpeg"></p>
+</li>
+</ul>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/Java/">Java</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/02/09/从JVM内存模型到JVM问题排查(一)/"
+                    data-tooltip="从JVM内存模型到JVM问题排查(一)"
+                    aria-label="下一篇: 从JVM内存模型到JVM问题排查(一)"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/02/11/从JVM内存模型到JVM问题排查-二/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/02/11/从JVM内存模型到JVM问题排查-二/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/02/11/从JVM内存模型到JVM问题排查-二/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2024 晨晨晨晨晨晨🐼. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/02/09/从JVM内存模型到JVM问题排查(一)/"
+                    data-tooltip="从JVM内存模型到JVM问题排查(一)"
+                    aria-label="下一篇: 从JVM内存模型到JVM问题排查(一)"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/02/11/从JVM内存模型到JVM问题排查-二/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/02/11/从JVM内存模型到JVM问题排查-二/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/02/11/从JVM内存模型到JVM问题排查-二/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/02/11/从JVM内存模型到JVM问题排查-二/"
+                        aria-label="分享到 Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>分享到 Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/02/11/从JVM内存模型到JVM问题排查-二/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/02/11/从JVM内存模型到JVM问题排查-二/"
+                        aria-label="分享到 Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>分享到 Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">晨晨晨晨晨晨🐼</h4>
+        
+            <div id="about-card-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Java开发者、PHP开发者、DevOps爱好者</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                杭州，中国🇨🇳
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('https://zc940702.top/assets/images/cover2.jpg');"></div>
+        <!--SCRIPTS-->
+
+    <script src="https://zc940702.top/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>
