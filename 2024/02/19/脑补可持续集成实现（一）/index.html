@@ -1,0 +1,598 @@
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="晨晨晨晨晨晨🐼&#39;s blog">
+    <title>脑补可持续集成实现（一） - 晨晨晨晨晨晨🐼&#39;s blog</title>
+    <meta name="author" content="晨晨晨晨晨晨🐼">
+    
+        <meta name="keywords" content="Java,PHP,DevOps,">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg"},"articleBody":"前言出于作者对DevOps的兴趣，虽然之前也有想法自己实践一套基于GitLab的CI/CD的完整流程以及通过ElectronJs开发一个桌面版发布清单应用，奈何一直没有时间做这件事。其实想想也不奇怪要做成这件事情也有不少东西去做，首先需要一台配置足够能跑GitLab的服务器（最好4C8G，感觉有点小贵。。。），其次需要了解gitlab-ci脚本的编写规则（这个其实不是很难），最后还得学习一下ElectronJs。这次我们就根据下面这个流程图慢慢把这个流程当拼图一样一步一步拼好。\n制作Java镜像先抛开Gitlab的步骤不谈（写这篇文章时条件限制，后续补上），当我们通过gitlab-ci.yml脚本将Java项目代码打包后上传至一个仓库到时候在编写Dockerfile的时候能够将打包好的Jar包下载来即可，作者这边是将打包好的Jar包放在服务器上通过Nginx下载文件。Nginx的配置如下：1234567891011server &#123;    location ^~ /downloadJar/ &#123;       #需要下载的文件存放的目录        alias  &lt;java_jar_package_path&gt;;        sendfile on;        autoindex on;  # 开启目录文件列表        autoindex_exact_size on;  # 显示出文件的确切大小，单位是bytes        autoindex_localtime on;  # 显示的文件时间为文件的服务器时间        charset utf-8,gbk;  # 避免中文乱码    &#125;&#125;\n效果就是下面这个样子，当然也可以将Jar包放在一些第三方存储服务上如OSS等等。确认能下载后就可以开始编写一个Java项目的Dockerfile，下面是作者编写的比较简单的一个Dockerfile。（真实的生产环境需要根据具体的情况去实现项目Dockerfile）1234567891011FROM openjdk:8-jdkMAINTAINER zhangchen zc19940702@gmail.comWORKDIR /var/www/projectADD &lt;DOWNLOAD_JAR_URL&gt; /var/www/project # 从远程地址下载jar包EXPOSE 8080CMD [&quot;java&quot;, &quot;-jar&quot;, &quot;micro-gateway-0.0.1-SNAPSHOT.jar&quot;]\n到这里我们就基本制作好了我们需要部署Java项目的镜像。\n镜像私有仓库搭建当我们镜像制作好了需要上传至镜像仓库，像Docker的镜像仓库主要是俩大类公共仓库如DockerHub，其次就是私有的镜像仓库如Registry、Harbor等。作者这边为了方便以及时间成本选择了Registry，但是为了更好的管理镜像最好是选择类似Harbor这样的服务。K8s从私有仓库拉取镜像是需要HTTPS的，这里可以使用自签证书（操作会略微复杂一点）或者由CA签发的SSL证书。作者依旧是为了方便用的是免费申请的SSL证书。通过以下命令搭建私有镜像仓库：123# 挂载证书目录至容器，通过环境变量REGISTRY_HTTP_TLS_CERTIFICATE、REGISTRY_HTTP_TLS_KEY配置SSLdocker run -d -v /var/www/blog:/var/www/cert -e REGISTRY_HTTP_TLS_CERTIFICATE=/var/www/cert/zc940702.top.pem -e REGISTRY_HTTP_TLS_KEY=/var/www/cert/zc940702.top.key -p 5000:5000 registry\n服务启动后我们就可以推送镜像到私有仓库，通过执行以下命令：123456789# 这里以nginx镜像举例docker tag nginx:latest &lt;YOUR_HOST&gt;:5000/nginx:latestdocker push &lt;YOUR_HOST&gt;:5000/nginx:latest# 推送成功后可以通过curl验证curl https://&lt;YOUR_HOST&gt;:5000/v2/_catalog\nK8s从私有仓库拉取镜像最后还是以nginx的资源清单举例，当我们将自己制作的镜像推到镜像仓库后就可以调整清单并让kubelet从私有仓库拉取镜像了。1234567891011121314151617181920apiVersion: apps/v1kind: Deploymentmetadata:  name: remote-registry-test  namespace:spec:  selector:    matchLabels:      app: nginx-test  replicas: 1  template:    metadata:      labels:        app: nginx-test    spec:      containers:      - name: nginx-test        image: &lt;YOUR_HOST&gt;:5000/nginx:latest # 从私有仓库拉取镜像        ports:        - containerPort: 80\n","dateCreated":"2024-02-19T21:26:19+08:00","dateModified":"2024-02-21T19:33:21+08:00","datePublished":"2024-02-19T21:26:19+08:00","description":"前言出于作者对DevOps的兴趣，虽然之前也有想法自己实践一套基于GitLab的CI/CD的完整流程以及通过ElectronJs开发一个桌面版发布清单应用，奈何一直没有时间做这件事。其实想想也不奇怪要做成这件事情也有不少东西去做，首先需要一台配置足够能跑GitLab的服务器（最好4C8G，感觉有点小贵。。。），其次需要了解gitlab-ci脚本的编写规则（这个其实不是很难），最后还得学习一下ElectronJs。这次我们就根据下面这个流程图慢慢把这个流程当拼图一样一步一步拼好。","headline":"脑补可持续集成实现（一）","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2024/02/19/脑补可持续集成实现（一）/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg","logo":{"@type":"ImageObject","url":"https://zc940702.top/assets/images/avatar.jpg"}},"url":"http://hellozzzc.github.io/2024/02/19/脑补可持续集成实现（一）/","keywords":"K8s"}</script>
+    <meta name="description" content="前言出于作者对DevOps的兴趣，虽然之前也有想法自己实践一套基于GitLab的CI/CD的完整流程以及通过ElectronJs开发一个桌面版发布清单应用，奈何一直没有时间做这件事。其实想想也不奇怪要做成这件事情也有不少东西去做，首先需要一台配置足够能跑GitLab的服务器（最好4C8G，感觉有点小贵。。。），其次需要了解gitlab-ci脚本的编写规则（这个其实不是很难），最后还得学习一下Ele">
+<meta name="keywords" content="K8s">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="脑补可持续集成实现（一）">
+<meta property="og:url" content="http://hellozzzc.github.io/2024/02/19/脑补可持续集成实现（一）/index.html">
+<meta property="og:site_name" content="晨晨晨晨晨晨🐼&#39;s blog">
+<meta property="og:description" content="前言出于作者对DevOps的兴趣，虽然之前也有想法自己实践一套基于GitLab的CI/CD的完整流程以及通过ElectronJs开发一个桌面版发布清单应用，奈何一直没有时间做这件事。其实想想也不奇怪要做成这件事情也有不少东西去做，首先需要一台配置足够能跑GitLab的服务器（最好4C8G，感觉有点小贵。。。），其次需要了解gitlab-ci脚本的编写规则（这个其实不是很难），最后还得学习一下Ele">
+<meta property="og:locale" content="zh-cn">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/gitlab_ci_cd.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/show_download_jar.png">
+<meta property="og:updated_time" content="2024-02-21T11:33:21.499Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="脑补可持续集成实现（一）">
+<meta name="twitter:description" content="前言出于作者对DevOps的兴趣，虽然之前也有想法自己实践一套基于GitLab的CI/CD的完整流程以及通过ElectronJs开发一个桌面版发布清单应用，奈何一直没有时间做这件事。其实想想也不奇怪要做成这件事情也有不少东西去做，首先需要一台配置足够能跑GitLab的服务器（最好4C8G，感觉有点小贵。。。），其次需要了解gitlab-ci脚本的编写规则（这个其实不是很难），最后还得学习一下Ele">
+<meta name="twitter:image" content="http://hellozzzc.github.io/assets/images/posts/gitlab_ci_cd.png">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="https://zc940702.top/assets/images/avatar.jpg"/>
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/style-p7w8wxcc22z0uoeozhcztvvpgv2umorvyzcejj03qywn9okzjboqr0e7flor.min.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            晨晨晨晨晨晨🐼&#39;s blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">晨晨晨晨晨晨🐼</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="搜索"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">搜索</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/HelloZZZC"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            脑补可持续集成实现（一）
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2024-02-19T21:26:19+08:00">
+	
+		    2024 年 2 月 19 日
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/运维/">运维</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <h3 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h3><p>出于作者对DevOps的兴趣，虽然之前也有想法自己实践一套基于<strong>GitLab</strong>的CI/CD的完整流程以及通过<strong>ElectronJs</strong>开发一个桌面版发布清单应用，奈何一直没有时间做这件事。其实想想也不奇怪要做成这件事情也有不少东西去做，首先需要一台配置足够能跑GitLab的服务器（最好4C8G，感觉有点小贵。。。），其次需要了解gitlab-ci脚本的编写规则（这个其实不是很难），最后还得学习一下ElectronJs。这次我们就根据下面这个流程图慢慢把这个流程当拼图一样一步一步拼好。<br><img src="/assets/images/posts/gitlab_ci_cd.png" alt="image.png"><br><a id="more"></a></p>
+<h3 id="制作Java镜像"><a href="#制作Java镜像" class="headerlink" title="制作Java镜像"></a>制作Java镜像</h3><p>先抛开Gitlab的步骤不谈（写这篇文章时条件限制，后续补上），当我们通过<code>gitlab-ci.yml</code>脚本将Java项目代码打包后上传至一个仓库到时候在编写Dockerfile的时候能够将打包好的Jar包下载来即可，作者这边是将打包好的Jar包放在服务器上通过Nginx下载文件。Nginx的配置如下：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">server &#123;</span><br><span class="line">    location ^~ /downloadJar/ &#123;</span><br><span class="line">       #需要下载的文件存放的目录</span><br><span class="line">        alias  &lt;java_jar_package_path&gt;;</span><br><span class="line">        sendfile on;</span><br><span class="line">        autoindex on;  # 开启目录文件列表</span><br><span class="line">        autoindex_exact_size on;  # 显示出文件的确切大小，单位是bytes</span><br><span class="line">        autoindex_localtime on;  # 显示的文件时间为文件的服务器时间</span><br><span class="line">        charset utf-8,gbk;  # 避免中文乱码</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>效果就是下面这个样子，当然也可以将Jar包放在一些第三方存储服务上如OSS等等。<br><img src="/assets/images/posts/show_download_jar.png" alt="image.png"><br>确认能下载后就可以开始编写一个Java项目的Dockerfile，下面是作者编写的比较简单的一个Dockerfile。（真实的生产环境需要根据具体的情况去实现项目Dockerfile）<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">FROM openjdk:8-jdk</span><br><span class="line"></span><br><span class="line">MAINTAINER zhangchen zc19940702@gmail.com</span><br><span class="line"></span><br><span class="line">WORKDIR /var/www/project</span><br><span class="line"></span><br><span class="line">ADD &lt;DOWNLOAD_JAR_URL&gt; /var/www/project # 从远程地址下载jar包</span><br><span class="line"></span><br><span class="line">EXPOSE 8080</span><br><span class="line"></span><br><span class="line">CMD [&quot;java&quot;, &quot;-jar&quot;, &quot;micro-gateway-0.0.1-SNAPSHOT.jar&quot;]</span><br></pre></td></tr></table></figure></p>
+<p>到这里我们就基本制作好了我们需要部署Java项目的镜像。</p>
+<h3 id="镜像私有仓库搭建"><a href="#镜像私有仓库搭建" class="headerlink" title="镜像私有仓库搭建"></a>镜像私有仓库搭建</h3><p>当我们镜像制作好了需要上传至镜像仓库，像Docker的镜像仓库主要是俩大类公共仓库如DockerHub，其次就是私有的镜像仓库如Registry、<a href="https://goharbor.io/" target="_blank" rel="noopener">Harbor</a>等。作者这边为了方便以及时间成本选择了Registry，<strong>但是为了更好的管理镜像最好是选择类似Harbor这样的服务</strong>。<br>K8s从私有仓库拉取镜像是需要HTTPS的，这里可以使用自签证书（操作会略微复杂一点）或者由CA签发的SSL证书。作者依旧是为了方便用的是免费申请的SSL证书。通过以下命令搭建私有镜像仓库：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"># 挂载证书目录至容器，通过环境变量REGISTRY_HTTP_TLS_CERTIFICATE、REGISTRY_HTTP_TLS_KEY配置SSL</span><br><span class="line"></span><br><span class="line">docker run -d -v /var/www/blog:/var/www/cert -e REGISTRY_HTTP_TLS_CERTIFICATE=/var/www/cert/zc940702.top.pem -e REGISTRY_HTTP_TLS_KEY=/var/www/cert/zc940702.top.key -p 5000:5000 registry</span><br></pre></td></tr></table></figure></p>
+<p>服务启动后我们就可以推送镜像到私有仓库，通过执行以下命令：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"># 这里以nginx镜像举例</span><br><span class="line"></span><br><span class="line">docker tag nginx:latest &lt;YOUR_HOST&gt;:5000/nginx:latest</span><br><span class="line"></span><br><span class="line">docker push &lt;YOUR_HOST&gt;:5000/nginx:latest</span><br><span class="line"></span><br><span class="line"># 推送成功后可以通过curl验证</span><br><span class="line"></span><br><span class="line">curl https://&lt;YOUR_HOST&gt;:5000/v2/_catalog</span><br></pre></td></tr></table></figure></p>
+<h3 id="K8s从私有仓库拉取镜像"><a href="#K8s从私有仓库拉取镜像" class="headerlink" title="K8s从私有仓库拉取镜像"></a>K8s从私有仓库拉取镜像</h3><p>最后还是以nginx的资源清单举例，当我们将自己制作的镜像推到镜像仓库后就可以调整清单并让kubelet从私有仓库拉取镜像了。<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">apiVersion: apps/v1</span><br><span class="line">kind: Deployment</span><br><span class="line">metadata:</span><br><span class="line">  name: remote-registry-test</span><br><span class="line">  namespace:</span><br><span class="line">spec:</span><br><span class="line">  selector:</span><br><span class="line">    matchLabels:</span><br><span class="line">      app: nginx-test</span><br><span class="line">  replicas: 1</span><br><span class="line">  template:</span><br><span class="line">    metadata:</span><br><span class="line">      labels:</span><br><span class="line">        app: nginx-test</span><br><span class="line">    spec:</span><br><span class="line">      containers:</span><br><span class="line">      - name: nginx-test</span><br><span class="line">        image: &lt;YOUR_HOST&gt;:5000/nginx:latest # 从私有仓库拉取镜像</span><br><span class="line">        ports:</span><br><span class="line">        - containerPort: 80</span><br></pre></td></tr></table></figure></p>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/K8s/">K8s</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/02/11/从JVM内存模型到JVM问题排查（二）/"
+                    data-tooltip="从JVM内存模型到JVM问题排查（二）"
+                    aria-label="下一篇: 从JVM内存模型到JVM问题排查（二）"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/02/19/脑补可持续集成实现（一）/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/02/19/脑补可持续集成实现（一）/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/02/19/脑补可持续集成实现（一）/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2024 晨晨晨晨晨晨🐼. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/02/11/从JVM内存模型到JVM问题排查（二）/"
+                    data-tooltip="从JVM内存模型到JVM问题排查（二）"
+                    aria-label="下一篇: 从JVM内存模型到JVM问题排查（二）"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/02/19/脑补可持续集成实现（一）/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/02/19/脑补可持续集成实现（一）/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/02/19/脑补可持续集成实现（一）/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/02/19/脑补可持续集成实现（一）/"
+                        aria-label="分享到 Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>分享到 Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/02/19/脑补可持续集成实现（一）/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/02/19/脑补可持续集成实现（一）/"
+                        aria-label="分享到 Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>分享到 Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">晨晨晨晨晨晨🐼</h4>
+        
+            <div id="about-card-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Java开发者、PHP开发者、DevOps爱好者</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                杭州，中国🇨🇳
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('https://zc940702.top/assets/images/cover2.jpg');"></div>
+        <!--SCRIPTS-->
+
+    <script src="https://zc940702.top/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>
