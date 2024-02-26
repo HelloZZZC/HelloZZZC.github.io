@@ -1,0 +1,708 @@
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="晨晨晨晨晨晨🐼&#39;s blog">
+    <title>知识梳理Mysql篇（二） - 晨晨晨晨晨晨🐼&#39;s blog</title>
+    <meta name="author" content="晨晨晨晨晨晨🐼">
+    
+        <meta name="keywords" content="Java,PHP,DevOps,">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg"},"articleBody":"前言之前已经写过一篇关于Mysql的文章，不过那篇文章主要是包含了Mysql基础的架构以及存储引擎的类型的内容。为了更好的应对往后的面试，因此该篇文章主要梳理Mysql当中系统的知识点。以下大概是该篇文章将会涉及的内容：\n事务该篇文章所有的内容都基于Innodb存储引擎的基础之上，毕竟Mysiam、Memory这种生产真的没见几个公司里用过。事务特性ACID以及事务隔离级别读未提交、读已提交、可重复读、串行化也是属于老生常谈的东西。因此通过一个表格简单总结一下：\n\n\n\n隔离级别\n并发问题\n\n\n\n\n读未提交\n可能会导致脏读、幻读或不可重复读\n\n\n读已提交\n可能会导致幻读或不可重复读\n\n\n可重复读\n可能会导致幻读\n\n\n串行化\n不会产生干扰\n\n\n\n通常默认的隔离级别是RR，不过也有企业为了追求更好的性能的并发选择RC。因为间隙锁（RR）关系可能会导致表锁，所以RC的并发性更优于RR。以下是具体的例子，假设现在有一张Table结构如下：\n\n\n\nid\nproduct_id\nstock\n\n\n\n\n1\n1\n2\n\n\n2\n2\n100\n\n\n8\n3\n500\n\n\n\n123456789101112131415# 执行以下SQL，并且在执行前关闭autocommit（set @@autocommit = 0）# Session1begin ;# 注：product_id字段无索引select * from product_stocks where product_id = 1 for update ;# Session2insert into product_stocks (product_id, stock) value (4, 1);# Session3select * from information_schema.INNODB_LOCKS;如果是RR下Session1会产生表锁导致Session2的插入操作阻塞。\n这里只是简单的举个例子，因为一些未曾注意的细节也会导致我们写的SQL在生产环境上造成了不小的影响。\n锁从上面的XMind我们也大致了解了锁的大致分类：行级锁、表级锁、记录锁、间隙锁（RR）以及临键锁。这里主要说明一点意向锁不会与行级的共享/排它锁互斥。以下表格是意向锁的兼容互斥性：\n\n\n\n\n意向共享锁（IS）\n意向排它锁（IX）\n\n\n\n\n意向共享锁\n兼容\n兼容\n\n\n意向排它锁\n兼容\n兼容\n\n\n\n\n\n\n\n意向共享锁（IS）\n意向排它锁（IX）\n\n\n\n\n共享锁（S）\n兼容\n互斥\n\n\n排它锁（X）\n互斥\n互斥\n\n\n\n索引索引一直都是面试中普遍会问的内容，因为索引还涉及到了SQL优化，面试多了其实基本都集中在索引类型、索引何时失效、最左侧原则等这几个问题。\n索引类型首先索引分聚簇索引、非聚簇索引。聚簇索引就是主键索引，它的特点是索引和数据放到一起。非聚簇索引则是数据和索引分开，通过叶子结点指向数据所在的位置，其实就是回表的操作。\n索引结构索引的数据结构主要是B+树和Hash，B+树和B树的区别主要是B+树叶子点存放数据并且叶子节点与相连的叶子节点之间有双向链表而B树则是非叶子节点也存储数据。下面我将B+树和B树的索引结构图分别展示：B+树B树由于B+树属于平衡二叉树，因此在索引深度上肯定优于红黑树、二叉树。Hash其实平常基本不会用，因为Hash这个结构无法满足我们平日里的范围查询以及排序的索引优化。\n索引下推（ICP）索引下推是Mysql自身对索引的优化。官方原话翻译（google翻译）：索引条件下推（ICP）是针对 MySQL 使用索引从表中检索行的情况的优化。如果没有 ICP，存储引擎将遍历索引来定位基表中的行，并将它们返回到 MySQL 服务器，由 MySQL 服务器评估这些行的 WHERE 条件。启用 ICP 后，如果可以仅使用索引中的列来评估 WHERE 条件的部分内容，则 MySQL 服务器会将 WHERE 条件的这部分内容推送到存储引擎。然后，存储引擎通过使用索引条目来评估推送的索引条件，并且仅当满足该条件时才从表中读取行。 ICP可以减少存储引擎必须访问基表的次数以及MySQL服务器必须访问存储引擎的次数。\n使用索引下推必须是二级索引，当我们通过exlain展示的是 Using index condition，说明运用了索引下推，目的是减少回表的次数。\n假设我们有条sql：select * from user where age = ‘18’ and name like ‘%chen%’;\n总结该篇文章主要包括了最开始XMind的右半部分，至于左半部分等作者出去玩回来再补上吧~\n","dateCreated":"2023-12-24T10:37:43+08:00","dateModified":"2024-02-26T22:36:44+08:00","datePublished":"2023-12-24T10:37:43+08:00","description":"前言之前已经写过一篇关于Mysql的文章，不过那篇文章主要是包含了Mysql基础的架构以及存储引擎的类型的内容。为了更好的应对往后的面试，因此该篇文章主要梳理Mysql当中系统的知识点。以下大概是该篇文章将会涉及的内容：","headline":"知识梳理Mysql篇（二）","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg","logo":{"@type":"ImageObject","url":"https://zc940702.top/assets/images/avatar.jpg"}},"url":"http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/","keywords":"Mysql"}</script>
+    <meta name="description" content="前言之前已经写过一篇关于Mysql的文章，不过那篇文章主要是包含了Mysql基础的架构以及存储引擎的类型的内容。为了更好的应对往后的面试，因此该篇文章主要梳理Mysql当中系统的知识点。以下大概是该篇文章将会涉及的内容：">
+<meta name="keywords" content="Mysql">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="知识梳理Mysql篇（二）">
+<meta property="og:url" content="http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/index.html">
+<meta property="og:site_name" content="晨晨晨晨晨晨🐼&#39;s blog">
+<meta property="og:description" content="前言之前已经写过一篇关于Mysql的文章，不过那篇文章主要是包含了Mysql基础的架构以及存储引擎的类型的内容。为了更好的应对往后的面试，因此该篇文章主要梳理Mysql当中系统的知识点。以下大概是该篇文章将会涉及的内容：">
+<meta property="og:locale" content="zh-cn">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/mysql_knowledge_2.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/B+_tree.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/B_tree.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/unuse_icp.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/use_icp.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/mysql_icp_principle.png">
+<meta property="og:updated_time" content="2024-02-26T14:36:44.943Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="知识梳理Mysql篇（二）">
+<meta name="twitter:description" content="前言之前已经写过一篇关于Mysql的文章，不过那篇文章主要是包含了Mysql基础的架构以及存储引擎的类型的内容。为了更好的应对往后的面试，因此该篇文章主要梳理Mysql当中系统的知识点。以下大概是该篇文章将会涉及的内容：">
+<meta name="twitter:image" content="http://hellozzzc.github.io/assets/images/posts/mysql_knowledge_2.png">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="https://zc940702.top/assets/images/avatar.jpg"/>
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/style-p7w8wxcc22z0uoeozhcztvvpgv2umorvyzcejj03qywn9okzjboqr0e7flor.min.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            晨晨晨晨晨晨🐼&#39;s blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">晨晨晨晨晨晨🐼</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="搜索"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">搜索</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/HelloZZZC"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            知识梳理Mysql篇（二）
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2023-12-24T10:37:43+08:00">
+	
+		    2023 年 12 月 24 日
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/后端技术/">后端技术</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <h3 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h3><p>之前已经写过<a href="https://hellozzzc.github.io/2020/06/14/%E7%9F%A5%E8%AF%86%E6%A2%B3%E7%90%86Mysql%E7%AF%87%EF%BC%88%E4%B8%80%EF%BC%89/">一篇关于Mysql的文章</a>，不过那篇文章主要是包含了Mysql基础的架构以及存储引擎的类型的内容。为了更好的应对往后的面试，因此该篇文章主要梳理Mysql当中系统的知识点。以下大概是该篇文章将会涉及的内容：<br><img src="/assets/images/posts/mysql_knowledge_2.png" alt="image.png"><br><a id="more"></a></p>
+<h3 id="事务"><a href="#事务" class="headerlink" title="事务"></a>事务</h3><p>该篇文章所有的内容都基于Innodb存储引擎的基础之上，毕竟Mysiam、Memory这种生产真的没见几个公司里用过。事务特性<strong>ACID</strong>以及事务隔离级别<strong>读未提交</strong>、<strong>读已提交</strong>、<strong>可重复读</strong>、<strong>串行化</strong>也是属于老生常谈的东西。因此通过一个表格简单总结一下：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">隔离级别</th>
+<th style="text-align:left">并发问题</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">读未提交</td>
+<td style="text-align:left">可能会导致脏读、幻读或不可重复读</td>
+</tr>
+<tr>
+<td style="text-align:left">读已提交</td>
+<td style="text-align:left">可能会导致幻读或不可重复读</td>
+</tr>
+<tr>
+<td style="text-align:left">可重复读</td>
+<td style="text-align:left">可能会导致幻读</td>
+</tr>
+<tr>
+<td style="text-align:left">串行化</td>
+<td style="text-align:left">不会产生干扰</td>
+</tr>
+</tbody>
+</table>
+<p>通常默认的隔离级别是<strong>RR</strong>，不过也有企业为了追求更好的性能的并发选择<strong>RC</strong>。因为间隙锁（RR）关系可能会导致表锁，所以RC的并发性更优于RR。以下是具体的例子，假设现在有一张Table结构如下：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">id</th>
+<th style="text-align:left">product_id</th>
+<th style="text-align:left">stock</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">1</td>
+<td style="text-align:left">1</td>
+<td style="text-align:left">2</td>
+</tr>
+<tr>
+<td style="text-align:left">2</td>
+<td style="text-align:left">2</td>
+<td style="text-align:left">100</td>
+</tr>
+<tr>
+<td style="text-align:left">8</td>
+<td style="text-align:left">3</td>
+<td style="text-align:left">500</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"># 执行以下SQL，并且在执行前关闭autocommit（set @@autocommit = 0）</span><br><span class="line"></span><br><span class="line"># Session1</span><br><span class="line">begin ;</span><br><span class="line"></span><br><span class="line"># 注：product_id字段无索引</span><br><span class="line">select * from product_stocks where product_id = 1 for update ;</span><br><span class="line"></span><br><span class="line"># Session2</span><br><span class="line">insert into product_stocks (product_id, stock) value (4, 1);</span><br><span class="line"></span><br><span class="line"># Session3</span><br><span class="line">select * from information_schema.INNODB_LOCKS;</span><br><span class="line"></span><br><span class="line">如果是RR下Session1会产生表锁导致Session2的插入操作阻塞。</span><br></pre></td></tr></table></figure>
+<p>这里只是简单的举个例子，因为一些未曾注意的细节也会导致我们写的SQL在生产环境上造成了不小的影响。</p>
+<h3 id="锁"><a href="#锁" class="headerlink" title="锁"></a>锁</h3><p>从上面的XMind我们也大致了解了锁的大致分类：行级锁、表级锁、记录锁、间隙锁（RR）以及临键锁。<strong>这里主要说明一点意向锁不会与行级的共享/排它锁互斥</strong>。以下表格是意向锁的兼容互斥性：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left"></th>
+<th style="text-align:left">意向共享锁（IS）</th>
+<th style="text-align:left">意向排它锁（IX）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">意向共享锁</td>
+<td style="text-align:left">兼容</td>
+<td style="text-align:left">兼容</td>
+</tr>
+<tr>
+<td style="text-align:left">意向排它锁</td>
+<td style="text-align:left">兼容</td>
+<td style="text-align:left">兼容</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th style="text-align:left"></th>
+<th style="text-align:left">意向共享锁（IS）</th>
+<th style="text-align:left">意向排它锁（IX）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">共享锁（S）</td>
+<td style="text-align:left">兼容</td>
+<td style="text-align:left">互斥</td>
+</tr>
+<tr>
+<td style="text-align:left">排它锁（X）</td>
+<td style="text-align:left">互斥</td>
+<td style="text-align:left">互斥</td>
+</tr>
+</tbody>
+</table>
+<h3 id="索引"><a href="#索引" class="headerlink" title="索引"></a>索引</h3><p>索引一直都是面试中普遍会问的内容，因为索引还涉及到了SQL优化，面试多了其实基本都集中在索引类型、索引何时失效、最左侧原则等这几个问题。</p>
+<h4 id="索引类型"><a href="#索引类型" class="headerlink" title="索引类型"></a>索引类型</h4><p>首先索引分聚簇索引、非聚簇索引。聚簇索引就是主键索引，它的特点是索引和数据放到一起。非聚簇索引则是数据和索引分开，通过叶子结点指向数据所在的位置，其实就是回表的操作。</p>
+<h4 id="索引结构"><a href="#索引结构" class="headerlink" title="索引结构"></a>索引结构</h4><p>索引的数据结构主要是B+树和Hash，B+树和B树的区别主要是B+树叶子点存放数据并且叶子节点与相连的叶子节点之间有双向链表而B树则是非叶子节点也存储数据。下面我将B+树和B树的索引结构图分别展示：<br><strong>B+树</strong><br><img src="/assets/images/posts/B+_tree.png" alt="image.png"><br><strong>B树</strong><br><img src="/assets/images/posts/B_tree.png" alt="image.png"><br>由于B+树属于平衡二叉树，因此在索引深度上肯定优于红黑树、二叉树。Hash其实平常基本不会用，因为Hash这个结构无法满足我们平日里的范围查询以及排序的索引优化。</p>
+<h4 id="索引下推（ICP）"><a href="#索引下推（ICP）" class="headerlink" title="索引下推（ICP）"></a>索引下推（ICP）</h4><p>索引下推是Mysql自身对索引的优化。<strong>官方原话翻译（google翻译）</strong>：索引条件下推（ICP）是针对 MySQL 使用索引从表中检索行的情况的优化。如果没有 ICP，存储引擎将遍历索引来定位基表中的行，并将它们返回到 MySQL 服务器，由 MySQL 服务器评估这些行的 WHERE 条件。启用 ICP 后，如果可以仅使用索引中的列来评估 WHERE 条件的部分内容，则 MySQL 服务器会将 WHERE 条件的这部分内容推送到存储引擎。然后，存储引擎通过使用索引条目来评估推送的索引条件，并且仅当满足该条件时才从表中读取行。 ICP可以减少存储引擎必须访问基表的次数以及MySQL服务器必须访问存储引擎的次数。</p>
+<p>使用索引下推必须是二级索引，当我们通过exlain展示的是 Using index condition，说明运用了索引下推，目的是减少回表的次数。</p>
+<p>假设我们有条sql：select * from user where age = ‘18’ and name like ‘%chen%’;<br><img src="/assets/images/posts/unuse_icp.png" alt="image.png"><br><img src="/assets/images/posts/use_icp.png" alt="image.png"><br><img src="/assets/images/posts/mysql_icp_principle.png" alt="image.png"></p>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>该篇文章主要包括了最开始XMind的右半部分，至于左半部分等作者出去玩回来再补上吧~</p>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/Mysql/">Mysql</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/01/27/K8s笔记-基础架构/"
+                    data-tooltip="K8s笔记--基础架构"
+                    aria-label="上一篇: K8s笔记--基础架构"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/06/14/知识梳理Mysql篇（一）/"
+                    data-tooltip="知识梳理Mysql篇（一）"
+                    aria-label="下一篇: 知识梳理Mysql篇（一）"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2024 晨晨晨晨晨晨🐼. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/01/27/K8s笔记-基础架构/"
+                    data-tooltip="K8s笔记--基础架构"
+                    aria-label="上一篇: K8s笔记--基础架构"
+                >
+                    
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2020/06/14/知识梳理Mysql篇（一）/"
+                    data-tooltip="知识梳理Mysql篇（一）"
+                    aria-label="下一篇: 知识梳理Mysql篇（一）"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/"
+                        aria-label="分享到 Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>分享到 Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/"
+                        aria-label="分享到 Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>分享到 Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">晨晨晨晨晨晨🐼</h4>
+        
+            <div id="about-card-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Java开发者、PHP开发者、DevOps爱好者</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                杭州，中国🇨🇳
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('https://zc940702.top/assets/images/cover2.jpg');"></div>
+        <!--SCRIPTS-->
+
+    <script src="https://zc940702.top/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>
