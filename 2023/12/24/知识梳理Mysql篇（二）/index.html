@@ -13,7 +13,7 @@
     
     
     
-    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg"},"articleBody":"前言之前已经写过一篇关于Mysql的文章，不过那篇文章主要是包含了Mysql基础的架构以及存储引擎的类型的内容。为了更好的应对往后的面试，因此该篇文章主要梳理Mysql当中系统的知识点。以下大概是该篇文章将会涉及的内容：\n事务该篇文章所有的内容都基于Innodb存储引擎的基础之上，毕竟Mysiam、Memory这种生产真的没见几个公司里用过。事务特性ACID以及事务隔离级别读未提交、读已提交、可重复读、串行化也是属于老生常谈的东西。因此通过一个表格简单总结一下：\n\n\n\n隔离级别\n并发问题\n\n\n\n\n读未提交\n可能会导致脏读、幻读或不可重复读\n\n\n读已提交\n可能会导致幻读或不可重复读\n\n\n可重复读\n可能会导致幻读\n\n\n串行化\n不会产生干扰\n\n\n\n通常默认的隔离级别是RR，不过也有企业为了追求更好的性能的并发选择RC。因为间隙锁（RR）关系可能会导致表锁，所以RC的并发性更优于RR。以下是具体的例子，假设现在有一张Table结构如下：\n\n\n\nid\nproduct_id\nstock\n\n\n\n\n1\n1\n2\n\n\n2\n2\n100\n\n\n8\n3\n500\n\n\n\n123456789101112131415# 执行以下SQL，并且在执行前关闭autocommit（set @@autocommit = 0）# Session1begin ;# 注：product_id字段无索引select * from product_stocks where product_id = 1 for update ;# Session2insert into product_stocks (product_id, stock) value (4, 1);# Session3select * from information_schema.INNODB_LOCKS;如果是RR下Session1会产生表锁导致Session2的插入操作阻塞。\n这里只是简单的举个例子，因为一些未曾注意的细节也会导致我们写的SQL在生产环境上造成了不小的影响。\n锁从上面的XMind我们也大致了解了锁的大致分类：行级锁、表级锁、记录锁、间隙锁（RR）以及临键锁。这里主要说明一点意向锁不会与行级的共享/排它锁互斥。以下表格是意向锁的兼容互斥性：\n\n\n\n\n意向共享锁（IS）\n意向排它锁（IX）\n\n\n\n\n意向共享锁\n兼容\n兼容\n\n\n意向排它锁\n兼容\n兼容\n\n\n\n\n\n\n\n意向共享锁（IS）\n意向排它锁（IX）\n\n\n\n\n共享锁（S）\n兼容\n互斥\n\n\n排它锁（X）\n互斥\n互斥\n\n\n\n索引索引一直都是面试中普遍会问的内容，因为索引还涉及到了SQL优化，面试多了其实基本都集中在索引类型、索引何时失效、最左侧原则等这几个问题。\n索引类型首先索引分聚簇索引、非聚簇索引。聚簇索引就是主键索引，它的特点是索引和数据放到一起。非聚簇索引则是数据和索引分开，通过叶子结点指向数据所在的位置，其实就是回表的操作。\n索引结构索引的数据结构主要是B+树和Hash，B+树和B树的区别主要是B+树叶子点存放数据并且叶子节点与相连的叶子节点之间有双向链表而B树则是非叶子节点也存储数据。下面我将B+树和B树的索引结构图分别展示：B+树B树由于B+树属于平衡二叉树，因此在索引深度上肯定优于红黑树、二叉树。Hash其实平常基本不会用，因为Hash这个结构无法满足我们平日里的范围查询以及排序的索引优化。\n索引下推（ICP）索引下推是Mysql自身对索引的优化。官方原话翻译（google翻译）：索引条件下推（ICP）是针对 MySQL 使用索引从表中检索行的情况的优化。如果没有 ICP，存储引擎将遍历索引来定位基表中的行，并将它们返回到 MySQL 服务器，由 MySQL 服务器评估这些行的 WHERE 条件。启用 ICP 后，如果可以仅使用索引中的列来评估 WHERE 条件的部分内容，则 MySQL 服务器会将 WHERE 条件的这部分内容推送到存储引擎。然后，存储引擎通过使用索引条目来评估推送的索引条件，并且仅当满足该条件时才从表中读取行。 ICP可以减少存储引擎必须访问基表的次数以及MySQL服务器必须访问存储引擎的次数。\n使用索引下推必须是二级索引，当我们通过exlain展示的是 Using index condition，说明运用了索引下推，目的是减少回表的次数。\n假设我们有条sql：select * from user where age = ‘18’ and name like ‘%chen%’;\n总结该篇文章主要包括了最开始XMind的右半部分，至于左半部分等作者出去玩回来再补上吧~\n","dateCreated":"2023-12-24T10:37:43+08:00","dateModified":"2024-02-26T22:49:23+08:00","datePublished":"2023-12-24T10:37:43+08:00","description":"前言之前已经写过一篇关于Mysql的文章，不过那篇文章主要是包含了Mysql基础的架构以及存储引擎的类型的内容。为了更好的应对往后的面试，因此该篇文章主要梳理Mysql当中系统的知识点。以下大概是该篇文章将会涉及的内容：","headline":"知识梳理Mysql篇（二）","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg","logo":{"@type":"ImageObject","url":"https://zc940702.top/assets/images/avatar.jpg"}},"url":"http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/","keywords":"Mysql"}</script>
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg"},"articleBody":"前言之前已经写过一篇关于Mysql的文章，不过那篇文章主要是包含了Mysql基础的架构以及存储引擎的类型的内容。为了更好的应对往后的面试，因此该篇文章主要梳理Mysql当中系统的知识点。以下大概是该篇文章将会涉及的内容：\n事务该篇文章所有的内容都基于Innodb存储引擎的基础之上，毕竟Mysiam、Memory这种生产真的没见几个公司里用过。事务特性ACID以及事务隔离级别读未提交、读已提交、可重复读、串行化也是属于老生常谈的东西。因此通过一个表格简单总结一下：\n\n\n\n隔离级别\n并发问题\n\n\n\n\n读未提交\n可能会导致脏读、幻读或不可重复读\n\n\n读已提交\n可能会导致幻读或不可重复读\n\n\n可重复读\n可能会导致幻读\n\n\n串行化\n不会产生干扰\n\n\n\n通常默认的隔离级别是RR，不过也有企业为了追求更好的性能的并发选择RC。因为间隙锁（RR）关系可能会导致表锁，所以RC的并发性更优于RR。以下是具体的例子，假设现在有一张Table结构如下：\n\n\n\nid\nproduct_id\nstock\n\n\n\n\n1\n1\n2\n\n\n2\n2\n100\n\n\n8\n3\n500\n\n\n\n123456789101112131415# 执行以下SQL，并且在执行前关闭autocommit（set @@autocommit = 0）# Session1begin ;# 注：product_id字段无索引select * from product_stocks where product_id = 1 for update ;# Session2insert into product_stocks (product_id, stock) value (4, 1);# Session3select * from information_schema.INNODB_LOCKS;如果是RR下Session1会产生表锁导致Session2的插入操作阻塞。\n这里只是简单的举个例子，因为一些未曾注意的细节也会导致我们写的SQL在生产环境上造成了不小的影响。\n锁从上面的XMind我们也大致了解了锁的大致分类：行级锁、表级锁、记录锁、间隙锁（RR）以及临键锁。这里主要说明一点意向锁不会与行级的共享/排它锁互斥。以下表格是意向锁的兼容互斥性：\n\n\n\n\n意向共享锁（IS）\n意向排它锁（IX）\n\n\n\n\n意向共享锁\n兼容\n兼容\n\n\n意向排它锁\n兼容\n兼容\n\n\n\n\n\n\n\n意向共享锁（IS）\n意向排它锁（IX）\n\n\n\n\n共享锁（S）\n兼容\n互斥\n\n\n排它锁（X）\n互斥\n互斥\n\n\n\n索引索引一直都是面试中普遍会问的内容，因为索引还涉及到了SQL优化，面试多了其实基本都集中在索引类型、索引何时失效、最左侧原则等这几个问题。\n索引类型首先索引分聚簇索引、非聚簇索引。聚簇索引就是主键索引，它的特点是索引和数据放到一起。非聚簇索引则是数据和索引分开，通过叶子结点指向数据所在的位置，其实就是回表的操作。\n索引结构索引的数据结构主要是B+树和Hash，B+树和B树的区别主要是B+树叶子点存放数据并且叶子节点与相连的叶子节点之间有双向链表而B树则是非叶子节点也存储数据。下面我将B+树和B树的索引结构图分别展示：B+树B树由于B+树属于平衡二叉树，因此在索引深度上肯定优于红黑树、二叉树。Hash其实平常基本不会用，因为Hash这个结构无法满足我们平日里的范围查询以及排序的索引优化。\n索引下推（ICP）索引下推是Mysql自身对索引的优化。官方原话翻译（google翻译）：索引条件下推（ICP）是针对 MySQL 使用索引从表中检索行的情况的优化。如果没有 ICP，存储引擎将遍历索引来定位基表中的行，并将它们返回到 MySQL 服务器，由 MySQL 服务器评估这些行的 WHERE 条件。启用 ICP 后，如果可以仅使用索引中的列来评估 WHERE 条件的部分内容，则 MySQL 服务器会将 WHERE 条件的这部分内容推送到存储引擎。然后，存储引擎通过使用索引条目来评估推送的索引条件，并且仅当满足该条件时才从表中读取行。 ICP可以减少存储引擎必须访问基表的次数以及MySQL服务器必须访问存储引擎的次数。\n使用索引下推必须是二级索引，当我们通过exlain展示的是 Using index condition，说明运用了索引下推，目的是减少回表的次数。\n假设我们有条sql：select * from user where age = ‘18’ and name like ‘%chen%’;\n总结该篇文章主要包括了最开始XMind的右半部分，至于左半部分等出去玩回来再补上吧~\n","dateCreated":"2023-12-24T10:37:43+08:00","dateModified":"2024-02-27T10:10:14+08:00","datePublished":"2023-12-24T10:37:43+08:00","description":"前言之前已经写过一篇关于Mysql的文章，不过那篇文章主要是包含了Mysql基础的架构以及存储引擎的类型的内容。为了更好的应对往后的面试，因此该篇文章主要梳理Mysql当中系统的知识点。以下大概是该篇文章将会涉及的内容：","headline":"知识梳理Mysql篇（二）","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg","logo":{"@type":"ImageObject","url":"https://zc940702.top/assets/images/avatar.jpg"}},"url":"http://hellozzzc.github.io/2023/12/24/知识梳理Mysql篇（二）/","keywords":"Mysql"}</script>
     <meta name="description" content="前言之前已经写过一篇关于Mysql的文章，不过那篇文章主要是包含了Mysql基础的架构以及存储引擎的类型的内容。为了更好的应对往后的面试，因此该篇文章主要梳理Mysql当中系统的知识点。以下大概是该篇文章将会涉及的内容：">
 <meta name="keywords" content="Mysql">
 <meta property="og:type" content="blog">
@@ -28,7 +28,7 @@
 <meta property="og:image" content="https://zc940702.top/assets/images/posts/unuse_icp.png">
 <meta property="og:image" content="https://zc940702.top/assets/images/posts/use_icp.png">
 <meta property="og:image" content="https://zc940702.top/assets/images/posts/mysql_icp_principle.png">
-<meta property="og:updated_time" content="2024-02-26T14:49:23.330Z">
+<meta property="og:updated_time" content="2024-02-27T02:10:14.799Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="知识梳理Mysql篇（二）">
 <meta name="twitter:description" content="前言之前已经写过一篇关于Mysql的文章，不过那篇文章主要是包含了Mysql基础的架构以及存储引擎的类型的内容。为了更好的应对往后的面试，因此该篇文章主要梳理Mysql当中系统的知识点。以下大概是该篇文章将会涉及的内容：">
@@ -371,7 +371,7 @@
 <h4 id="索引下推（ICP）"><a href="#索引下推（ICP）" class="headerlink" title="索引下推（ICP）"></a>索引下推（ICP）</h4><p>索引下推是Mysql自身对索引的优化。<strong>官方原话翻译（google翻译）</strong>：索引条件下推（ICP）是针对 MySQL 使用索引从表中检索行的情况的优化。如果没有 ICP，存储引擎将遍历索引来定位基表中的行，并将它们返回到 MySQL 服务器，由 MySQL 服务器评估这些行的 WHERE 条件。启用 ICP 后，如果可以仅使用索引中的列来评估 WHERE 条件的部分内容，则 MySQL 服务器会将 WHERE 条件的这部分内容推送到存储引擎。然后，存储引擎通过使用索引条目来评估推送的索引条件，并且仅当满足该条件时才从表中读取行。 ICP可以减少存储引擎必须访问基表的次数以及MySQL服务器必须访问存储引擎的次数。</p>
 <p>使用索引下推必须是二级索引，当我们通过exlain展示的是 Using index condition，说明运用了索引下推，目的是减少回表的次数。</p>
 <p>假设我们有条sql：select * from user where age = ‘18’ and name like ‘%chen%’;<br><img src="https://zc940702.top/assets/images/posts/unuse_icp.png" alt="image.png"><br><img src="https://zc940702.top/assets/images/posts/use_icp.png" alt="image.png"><br><img src="https://zc940702.top/assets/images/posts/mysql_icp_principle.png" alt="image.png"></p>
-<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>该篇文章主要包括了最开始XMind的右半部分，至于左半部分等作者出去玩回来再补上吧~</p>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>该篇文章主要包括了最开始XMind的右半部分，至于左半部分等出去玩回来再补上吧~</p>
 
             
 
@@ -396,9 +396,9 @@
                     
                 <a
                     class="post-action-btn btn btn--default tooltip--top"
-                    href="/2024/01/27/K8s笔记-基础架构/"
-                    data-tooltip="K8s笔记--基础架构"
-                    aria-label="上一篇: K8s笔记--基础架构"
+                    href="/2024/01/13/知识梳理Mysql篇（三）/"
+                    data-tooltip="知识梳理Mysql篇（三）"
+                    aria-label="上一篇: 知识梳理Mysql篇（三）"
                 >
                     
                         <i class="fa fa-angle-left" aria-hidden="true"></i>
@@ -511,9 +511,9 @@
                     
                 <a
                     class="post-action-btn btn btn--default tooltip--top"
-                    href="/2024/01/27/K8s笔记-基础架构/"
-                    data-tooltip="K8s笔记--基础架构"
-                    aria-label="上一篇: K8s笔记--基础架构"
+                    href="/2024/01/13/知识梳理Mysql篇（三）/"
+                    data-tooltip="知识梳理Mysql篇（三）"
+                    aria-label="上一篇: 知识梳理Mysql篇（三）"
                 >
                     
                         <i class="fa fa-angle-left" aria-hidden="true"></i>
