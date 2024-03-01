@@ -267,7 +267,7 @@
 <li>Master接收命令后通过bgsave生成当前最新的一份rdb数据并发送给Slave，此时客户端针对修改指令Master会将其缓存一份至buffer中；</li>
 <li>Slave接收到Master的rdb数据后，清空老数据并开始加载主节点的rdb数据，加载完毕后再加载Master节点缓存在buffer中的数据；</li>
 </ol>
-<p><img src="/assets/images/posts/redis_backup_all.png" alt="image.png"><br>
+<p><img src="https://zc940702.top/assets/images/posts/redis_backup_all.png" alt="image.png"><br>
                     
                         <a
                             href="/2024/02/21/Redis集群笔记/"
