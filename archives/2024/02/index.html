@@ -235,6 +235,64 @@
                     
                         <a
                             class="link-unstyled"
+                            href="/2024/02/21/Redis集群笔记/"
+                            aria-label=": Redis集群笔记"
+                        >
+                            Redis集群笔记
+                        </a>
+                    
+                </h1>
+                <div class="postShorten-meta">
+    <time datetime="2024-02-21T10:09:05+08:00">
+	
+		    2024 年 2 月 21 日
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/缓存/">缓存</a>
+
+
+    
+</div>
+
+            </div>
+            
+                <div class="postShorten-excerpt">
+                    <h3 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h3><p>该篇主要搬运作者之前记录的Redis集群笔记，内容包括：Redis主从、哨兵以及Redis集群。</p>
+<h3 id="主从"><a href="#主从" class="headerlink" title="主从"></a>主从</h3><h4 id="全量复制"><a href="#全量复制" class="headerlink" title="全量复制"></a>全量复制</h4><p>从下图我们大致可以了解Redis全量复制的一个过程:</p>
+<ol>
+<li>Slave发送psync同步数据指令；</li>
+<li>Master接收命令后通过bgsave生成当前最新的一份rdb数据并发送给Slave，此时客户端针对修改指令Master会将其缓存一份至buffer中；</li>
+<li>Slave接收到Master的rdb数据后，清空老数据并开始加载主节点的rdb数据，加载完毕后再加载Master节点缓存在buffer中的数据；</li>
+</ol>
+<p><img src="/assets/images/posts/redis_backup_all.png" alt="image.png"><br>
+                    
+                        <a
+                            href="/2024/02/21/Redis集群笔记/"
+                            class="postShorten-excerpt_link link"
+                            aria-label=": Redis集群笔记"
+                        >
+                            阅读全文
+                        </a>
+                        
+                    
+                </div>
+            
+        </div>
+        
+    </article>
+    
+    
+    <article class="postShorten postShorten--thumbnailimg-right">
+        <div class="postShorten-wrap">
+            
+            <div class="postShorten-header">
+                <h1 class="postShorten-title">
+                    
+                        <a
+                            class="link-unstyled"
                             href="/2024/02/19/脑补可持续集成实现（一）/"
                             aria-label=": 脑补可持续集成实现（一）"
                         >
@@ -404,7 +462,7 @@
     
         <span>发布在 </span>
         
-    <a class="category-link" href="/categories/后端技术/">后端技术</a>
+    <a class="category-link" href="/categories/缓存/">缓存</a>
 
 
     
