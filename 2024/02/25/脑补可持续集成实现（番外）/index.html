@@ -1,0 +1,597 @@
+
+<!DOCTYPE html>
+<html lang="zh-cn">
+    
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="generator" content="晨晨晨晨晨晨🐼&#39;s blog">
+    <title>脑补可持续集成实现（番外） - 晨晨晨晨晨晨🐼&#39;s blog</title>
+    <meta name="author" content="晨晨晨晨晨晨🐼">
+    
+        <meta name="keywords" content="Java,PHP,DevOps,">
+    
+    
+    
+    <script type="application/ld+json">{"@context":"http://schema.org","@type":"BlogPosting","author":{"@type":"Person","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg"},"articleBody":"前言该篇算是这个系列的一个番外篇，主要因为作者的一个痛点而引出的一篇文章。部署过Gitlab的同学估计了解过Gitlab服务部署的一个最低的推荐配置是4C4G，那么问题来了作者自己的服务器是2C2G，朋友的服务器是4C8G，虽然朋友的服务器能满足要求，但毕竟不是自己的，而且被作者用来当做K8s的Worker节点，因此也不太想在上面继续部署一个Gitlab。所幸作者自己还有一台配置还可以的Windows台式机，到时候安装一个Linux虚拟机就可以部署极狐，最后在通过内网穿透作者就能正常使用Gitlab了。你以为故事到这就结束了？NO！作者惊喜的发现Windows为了拥抱Linux开发推出了《Windows Subsytem For Linux（WSL）》这项功能使得Linux的开发人员无需虚拟机，直接提供无缝且高效的体验！！！所以下面作者也马上体验了一番。\n安装执行wsl --install前建议先将自己网络的DNS改成手动如114.114.114.114或者8.8.8.8，安装默认的Linux版本是Ubuntu-22.04，作者用的是Ubuntu-20.04版本跟自己腾讯云服务器保持一致，通过执行wsl --install -d ubuntu-20.04下载对应版本。成功之后我们就能在菜单中找到Ubuntu的应用程序，如下图所示：\n迁移默认这套系统是安装在C盘，但由于作者这台C盘除了做系统盘（SSD）外还放了一些Game（为了Loading更快点。。），因此需要将系统安装至其他机械盘。操作如下：12345678910111213# 以下指令是将系统迁移至G盘安装# 关闭系统wsl --shutdown# 导出系统tar文件wsl --export Ubuntu-20.04 G:\\wsl-ubuntu-20.04\\Ubuntu.tar# 删除当前的Ubuntu系统wsl --unregister Ubuntu-20.04# 重新导入G盘的tar文件wsl --import Ubuntu-20.04 G:\\wsl-ubuntu-20.04 G:\\wsl-ubuntu-20.04\\Ubuntu.tar\n截图如下：\n\n体验作者正常使用下来没什么问题，后续将基于极狐的文档在这台台式机上部署服务继续实现后面CI/CD流程。对了，感兴趣的同学可以点到WSL的链接看看，虽然大多数的开发者都是直接使用Linux系统或者MacOS系统，但Windows这波操作作者还是点赞的！确实让用Windows系统开发的同学轻松了很多省去安装虚拟机亦或是安装双系统的麻烦。\n","dateCreated":"2024-02-25T19:12:13+08:00","dateModified":"2024-03-03T21:46:38+08:00","datePublished":"2024-02-25T19:12:13+08:00","description":"前言该篇算是这个系列的一个番外篇，主要因为作者的一个痛点而引出的一篇文章。部署过Gitlab的同学估计了解过Gitlab服务部署的一个最低的推荐配置是4C4G，那么问题来了作者自己的服务器是2C2G，朋友的服务器是4C8G，虽然朋友的服务器能满足要求，但毕竟不是自己的，而且被作者用来当做K8s的Worker节点，因此也不太想在上面继续部署一个Gitlab。所幸作者自己还有一台配置还可以的Windows台式机，到时候安装一个Linux虚拟机就可以部署极狐，最后在通过内网穿透作者就能正常使用Gitlab了。你以为故事到这就结束了？NO！作者惊喜的发现Windows为了拥抱Linux开发推出了《Windows Subsytem For Linux（WSL）》这项功能使得Linux的开发人员无需虚拟机，直接提供无缝且高效的体验！！！所以下面作者也马上体验了一番。","headline":"脑补可持续集成实现（番外）","image":[],"mainEntityOfPage":{"@type":"WebPage","@id":"http://hellozzzc.github.io/2024/02/25/脑补可持续集成实现（番外）/"},"publisher":{"@type":"Organization","name":"晨晨晨晨晨晨🐼","sameAs":["https://github.com/HelloZZZC"],"image":"https://zc940702.top/assets/images/avatar.jpg","logo":{"@type":"ImageObject","url":"https://zc940702.top/assets/images/avatar.jpg"}},"url":"http://hellozzzc.github.io/2024/02/25/脑补可持续集成实现（番外）/","keywords":"Windows"}</script>
+    <meta name="description" content="前言该篇算是这个系列的一个番外篇，主要因为作者的一个痛点而引出的一篇文章。部署过Gitlab的同学估计了解过Gitlab服务部署的一个最低的推荐配置是4C4G，那么问题来了作者自己的服务器是2C2G，朋友的服务器是4C8G，虽然朋友的服务器能满足要求，但毕竟不是自己的，而且被作者用来当做K8s的Worker节点，因此也不太想在上面继续部署一个Gitlab。所幸作者自己还有一台配置还可以的Windo">
+<meta name="keywords" content="Windows">
+<meta property="og:type" content="blog">
+<meta property="og:title" content="脑补可持续集成实现（番外）">
+<meta property="og:url" content="http://hellozzzc.github.io/2024/02/25/脑补可持续集成实现（番外）/index.html">
+<meta property="og:site_name" content="晨晨晨晨晨晨🐼&#39;s blog">
+<meta property="og:description" content="前言该篇算是这个系列的一个番外篇，主要因为作者的一个痛点而引出的一篇文章。部署过Gitlab的同学估计了解过Gitlab服务部署的一个最低的推荐配置是4C4G，那么问题来了作者自己的服务器是2C2G，朋友的服务器是4C8G，虽然朋友的服务器能满足要求，但毕竟不是自己的，而且被作者用来当做K8s的Worker节点，因此也不太想在上面继续部署一个Gitlab。所幸作者自己还有一台配置还可以的Windo">
+<meta property="og:locale" content="zh-cn">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/wsl_ubuntu.png">
+<meta property="og:image" content="http://hellozzzc.github.io/assets/images/posts/wsl_ubuntu_to_g.png">
+<meta property="og:updated_time" content="2024-03-03T13:46:38.548Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="脑补可持续集成实现（番外）">
+<meta name="twitter:description" content="前言该篇算是这个系列的一个番外篇，主要因为作者的一个痛点而引出的一篇文章。部署过Gitlab的同学估计了解过Gitlab服务部署的一个最低的推荐配置是4C4G，那么问题来了作者自己的服务器是2C2G，朋友的服务器是4C8G，虽然朋友的服务器能满足要求，但毕竟不是自己的，而且被作者用来当做K8s的Worker节点，因此也不太想在上面继续部署一个Gitlab。所幸作者自己还有一台配置还可以的Windo">
+<meta name="twitter:image" content="http://hellozzzc.github.io/assets/images/posts/wsl_ubuntu.png">
+    
+    
+        
+    
+    
+        <meta property="og:image" content="https://zc940702.top/assets/images/avatar.jpg"/>
+    
+    
+    
+    
+    <!--STYLES-->
+    <link rel="stylesheet" href="/assets/css/style-p7w8wxcc22z0uoeozhcztvvpgv2umorvyzcejj03qywn9okzjboqr0e7flor.min.css">
+    <!--STYLES END-->
+    
+
+    
+
+    
+        
+    
+</head>
+
+    <body>
+        <div id="blog">
+            <!-- Define author's picture -->
+
+
+    
+        
+            
+        
+    
+
+<header id="header" data-behavior="4">
+    <i id="btn-open-sidebar" class="fa fa-lg fa-bars"></i>
+    <div class="header-title">
+        <a
+            class="header-title-link"
+            href="/"
+            aria-label=""
+        >
+            晨晨晨晨晨晨🐼&#39;s blog
+        </a>
+    </div>
+    
+        
+            <a
+                class="header-right-picture "
+                href="#about"
+                aria-label="打开链接: /#about"
+            >
+        
+        
+            <img class="header-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+        </a>
+    
+</header>
+
+            <!-- Define author's picture -->
+
+
+
+        
+    
+
+<nav id="sidebar" data-behavior="4">
+    <div class="sidebar-container">
+        
+            <div class="sidebar-profile">
+                <a
+                    href="/#about"
+                    aria-label="阅读有关作者的更多信息"
+                >
+                    <img class="sidebar-profile-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
+                </a>
+                <h4 class="sidebar-profile-name">晨晨晨晨晨晨🐼</h4>
+                
+                    <h5 class="sidebar-profile-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</h5>
+                
+            </div>
+        
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/"
+                            
+                            rel="noopener"
+                            title="首页"
+                        >
+                        <i class="sidebar-button-icon fa fa-home" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">首页</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-categories"
+                            
+                            rel="noopener"
+                            title="分类"
+                        >
+                        <i class="sidebar-button-icon fa fa-bookmark" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">分类</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-tags"
+                            
+                            rel="noopener"
+                            title="标签"
+                        >
+                        <i class="sidebar-button-icon fa fa-tags" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">标签</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="/all-archives"
+                            
+                            rel="noopener"
+                            title="归档"
+                        >
+                        <i class="sidebar-button-icon fa fa-archive" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">归档</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link open-algolia-search"
+                            href="#search"
+                            
+                            rel="noopener"
+                            title="搜索"
+                        >
+                        <i class="sidebar-button-icon fa fa-search" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">搜索</span>
+                    </a>
+            </li>
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="#about"
+                            
+                            rel="noopener"
+                            title="关于"
+                        >
+                        <i class="sidebar-button-icon fa fa-question" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">关于</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+            <ul class="sidebar-buttons">
+            
+                <li class="sidebar-button">
+                    
+                        <a
+                            class="sidebar-button-link "
+                            href="https://github.com/HelloZZZC"
+                            
+                                target="_blank"
+                            
+                            rel="noopener"
+                            title="GitHub"
+                        >
+                        <i class="sidebar-button-icon fab fa-github" aria-hidden="true"></i>
+                        <span class="sidebar-button-desc">GitHub</span>
+                    </a>
+            </li>
+            
+        </ul>
+        
+    </div>
+</nav>
+
+            
+            <div id="main" data-behavior="4"
+                 class="
+                        hasCoverMetaIn
+                        ">
+                
+<article class="post">
+    
+    
+        <div class="post-header main-content-wrap text-left">
+    
+        <h1 class="post-title">
+            脑补可持续集成实现（番外）
+        </h1>
+    
+    
+        <div class="post-meta">
+    <time datetime="2024-02-25T19:12:13+08:00">
+	
+		    2024 年 2 月 25 日
+    	
+    </time>
+    
+        <span>发布在 </span>
+        
+    <a class="category-link" href="/categories/系统/">系统</a>
+
+
+    
+</div>
+
+    
+</div>
+
+    
+    <div class="post-content markdown">
+        <div class="main-content-wrap">
+            <h3 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h3><p>该篇算是这个系列的一个番外篇，主要因为作者的一个痛点而引出的一篇文章。部署过Gitlab的同学估计了解过Gitlab服务部署的一个最低的推荐配置是<code>4C4G</code>，那么问题来了作者自己的服务器是<code>2C2G</code>，朋友的服务器是4C8G，虽然朋友的服务器能满足要求，但毕竟不是自己的，而且被作者用来当做K8s的Worker节点，因此也不太想在上面继续部署一个Gitlab。所幸作者自己还有一台配置还可以的Windows台式机，到时候安装一个Linux虚拟机就可以部署<strong>极狐</strong>，最后在通过<strong>内网穿透</strong>作者就能正常使用Gitlab了。你以为故事到这就结束了？NO！作者惊喜的发现Windows为了拥抱Linux开发推出了<a href="https://learn.microsoft.com/en-us/windows/wsl/about" target="_blank" rel="noopener">《Windows Subsytem For Linux（WSL）》</a>这项功能使得Linux的开发人员无需虚拟机，直接提供无缝且高效的体验！！！所以下面作者也马上体验了一番。<br><a id="more"></a></p>
+<h3 id="安装"><a href="#安装" class="headerlink" title="安装"></a>安装</h3><p>执行<code>wsl --install</code>前建议先将自己网络的DNS改成手动如<code>114.114.114.114</code>或者<code>8.8.8.8</code>，安装默认的Linux版本是<code>Ubuntu-22.04</code>，作者用的是<code>Ubuntu-20.04</code>版本跟自己腾讯云服务器保持一致，通过执行<code>wsl --install -d ubuntu-20.04</code>下载对应版本。成功之后我们就能在菜单中找到Ubuntu的应用程序，如下图所示：<br><img src="/assets/images/posts/wsl_ubuntu.png" alt="image.png"></p>
+<h3 id="迁移"><a href="#迁移" class="headerlink" title="迁移"></a>迁移</h3><p>默认这套系统是安装在C盘，但由于作者这台C盘除了做系统盘（SSD）外还放了一些Game（为了Loading更快点。。），因此需要将系统安装至其他机械盘。操作如下：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"># 以下指令是将系统迁移至G盘安装</span><br><span class="line"></span><br><span class="line"># 关闭系统</span><br><span class="line">wsl --shutdown</span><br><span class="line"></span><br><span class="line"># 导出系统tar文件</span><br><span class="line">wsl --export Ubuntu-20.04 G:\wsl-ubuntu-20.04\Ubuntu.tar</span><br><span class="line"></span><br><span class="line"># 删除当前的Ubuntu系统</span><br><span class="line">wsl --unregister Ubuntu-20.04</span><br><span class="line"></span><br><span class="line"># 重新导入G盘的tar文件</span><br><span class="line">wsl --import Ubuntu-20.04 G:\wsl-ubuntu-20.04 G:\wsl-ubuntu-20.04\Ubuntu.tar</span><br></pre></td></tr></table></figure></p>
+<p>截图如下：</p>
+<p><img src="/assets/images/posts/wsl_ubuntu_to_g.png" alt="image.png"></p>
+<h3 id="体验"><a href="#体验" class="headerlink" title="体验"></a>体验</h3><p>作者正常使用下来没什么问题，后续将基于极狐的文档在这台台式机上部署服务继续实现后面CI/CD流程。对了，感兴趣的同学可以点到WSL的链接看看，虽然大多数的开发者都是直接使用Linux系统或者MacOS系统，但Windows这波操作作者还是点赞的！确实让用Windows系统开发的同学轻松了很多省去安装虚拟机亦或是安装双系统的麻烦。</p>
+
+            
+
+
+        </div>
+    </div>
+    <div id="post-footer" class="post-footer main-content-wrap">
+        
+            <div class="post-footer-tags">
+                <span class="text-color-light text-small">标签</span><br/>
+                
+    <a class="tag tag--primary tag--small t-link" href="/tags/Windows/">Windows</a>
+
+            </div>
+        
+        
+            <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/02/21/Redis集群笔记/"
+                    data-tooltip="Redis集群笔记"
+                    aria-label="下一篇: Redis集群笔记"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/02/25/脑补可持续集成实现（番外）/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/02/25/脑补可持续集成实现（番外）/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/02/25/脑补可持续集成实现（番外）/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+        
+        
+            
+        
+    </div>
+</article>
+
+
+
+                <footer id="footer" class="main-content-wrap">
+    <span class="copyrights">
+        Copyrights &copy; 2024 晨晨晨晨晨晨🐼. All Rights Reserved.
+    </span>
+</footer>
+
+            </div>
+            
+                <div id="bottom-bar" class="post-bottom-bar" data-behavior="4">
+                    <div class="post-actions-wrap">
+    <nav>
+        <ul class="post-actions post-action-nav">
+            <li class="post-action">
+                
+                    <a
+                        class="post-action-btn btn btn--disabled"
+                        aria-hidden="true"
+                    >
+                        
+                        <i class="fa fa-angle-left" aria-hidden="true"></i>
+                        <span class="hide-xs hide-sm text-small icon-ml">上一篇</span>
+                    </a>
+            </li>
+            <li class="post-action">
+                
+                    
+                <a
+                    class="post-action-btn btn btn--default tooltip--top"
+                    href="/2024/02/21/Redis集群笔记/"
+                    data-tooltip="Redis集群笔记"
+                    aria-label="下一篇: Redis集群笔记"
+                >
+                    
+                        <span class="hide-xs hide-sm text-small icon-mr">下一篇</span>
+                        <i class="fa fa-angle-right" aria-hidden="true"></i>
+                    </a>
+            </li>
+        </ul>
+    </nav>
+    <ul class="post-actions post-action-share">
+        <li class="post-action hide-lg hide-md hide-sm">
+            <a
+                class="post-action-btn btn btn--default btn-open-shareoptions"
+                href="#btn-open-shareoptions"
+                aria-label="post.share"
+            >
+                <i class="fa fa-share-alt" aria-hidden="true"></i>
+            </a>
+        </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/02/25/脑补可持续集成实现（番外）/"
+                    title="分享到 Facebook"
+                    aria-label="分享到 Facebook"
+                >
+                    <i class="fab fa-facebook" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/02/25/脑补可持续集成实现（番外）/"
+                    title="分享到 Twitter"
+                    aria-label="分享到 Twitter"
+                >
+                    <i class="fab fa-twitter" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+            
+            
+            <li class="post-action hide-xs">
+                <a
+                    class="post-action-btn btn btn--default"
+                    target="new" href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/02/25/脑补可持续集成实现（番外）/"
+                    title="分享到 Google+"
+                    aria-label="分享到 Google+"
+                >
+                    <i class="fab fa-google-plus" aria-hidden="true"></i>
+                </a>
+            </li>
+        
+        
+            
+        
+        <li class="post-action">
+            
+                <a class="post-action-btn btn btn--default" href="#" aria-label="post.back_to_top">
+            
+                <i class="fa fa-list" aria-hidden="true"></i>
+            </a>
+        </li>
+    </ul>
+</div>
+
+
+                </div>
+                
+    <div id="share-options-bar" class="share-options-bar" data-behavior="4">
+        <i id="btn-close-shareoptions" class="fa fa-times"></i>
+        <ul class="share-options">
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://www.facebook.com/sharer/sharer.php?u=http://hellozzzc.github.io/2024/02/25/脑补可持续集成实现（番外）/"
+                        aria-label="分享到 Facebook"
+                    >
+                        <i class="fab fa-facebook" aria-hidden="true"></i><span>分享到 Facebook</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://twitter.com/intent/tweet?text=http://hellozzzc.github.io/2024/02/25/脑补可持续集成实现（番外）/"
+                        aria-label="分享到 Twitter"
+                    >
+                        <i class="fab fa-twitter" aria-hidden="true"></i><span>分享到 Twitter</span>
+                    </a>
+                </li>
+            
+                
+                
+                <li class="share-option">
+                    <a
+                        class="share-option-btn"
+                        target="new"
+                        href="https://plus.google.com/share?url=http://hellozzzc.github.io/2024/02/25/脑补可持续集成实现（番外）/"
+                        aria-label="分享到 Google+"
+                    >
+                        <i class="fab fa-google-plus" aria-hidden="true"></i><span>分享到 Google+</span>
+                    </a>
+                </li>
+            
+        </ul>
+    </div>
+
+
+            
+        </div>
+        
+
+
+    
+        
+    
+
+<div id="about">
+    <div id="about-card">
+        <div id="about-btn-close">
+            <i class="fa fa-times"></i>
+        </div>
+        
+            <img id="about-card-picture" src="https://zc940702.top/assets/images/avatar.jpg" alt="作者的图片"/>
+        
+            <h4 id="about-card-name">晨晨晨晨晨晨🐼</h4>
+        
+            <div id="about-card-bio"><p>凛冬散尽，待春拂面，星河长明。</p>
+</div>
+        
+        
+            <div id="about-card-job">
+                <i class="fa fa-briefcase"></i>
+                <br/>
+                <p>Java开发者、PHP开发者、DevOps爱好者</p>
+
+            </div>
+        
+        
+            <div id="about-card-location">
+                <i class="fa fa-map-marker-alt"></i>
+                <br/>
+                杭州，中国🇨🇳
+            </div>
+        
+    </div>
+</div>
+
+        
+        
+<div id="cover" style="background-image:url('https://zc940702.top/assets/images/cover2.jpg');"></div>
+        <!--SCRIPTS-->
+
+    <script src="https://zc940702.top/assets/js/script-wvqkwyudmu38rhlubnd8ofdizi73uzvllg16bvdackcmqozxyrgohdhjllya.min.js"></script>
+
+<!--SCRIPTS END-->
+
+
+    
+
+
+
+
+    </body>
+</html>
